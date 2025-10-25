@@ -5,6 +5,7 @@ import com.example.sphereescape2125.screens.GameScreen
 import com.example.sphereescape2125.screens.MainMenu
 import com.example.sphereescape2125.screens.StatScreen
 
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,12 +19,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.mazeapp.ui.theme.MazeAppTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SphereEscapeApp()
+            MazeAppTheme(darkTheme = true) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    SphereEscapeApp()
+                }
+            }
         }
     }
 }
