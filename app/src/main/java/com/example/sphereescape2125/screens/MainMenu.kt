@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
-import com.example.sphereescape2125.ui.theme.Orange
+
 
 
 @Composable
@@ -30,7 +30,10 @@ fun MainMenu(
         Button(
             onClick = onPlay,
             shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = Orange),
+            // Użyj koloru z motywu
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
             modifier = Modifier.size(100.dp)
         ) {}
 
