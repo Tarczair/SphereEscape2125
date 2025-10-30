@@ -18,9 +18,16 @@ private val DarkColors = darkColorScheme(
     onSurface = Color.White
 )
 
+// NOWA paleta jasna (Turkus / Błękit)
 private val LightColors = lightColorScheme(
-    primary = Color.Red,
-    secondary = Color(0xFF2196F3)
+    primary = Color(0xFF00897B), // Główny akcent: Miętowy/Turkusowy (np. przyciski)
+    secondary = Color(0xFF0277BD), // Drugi akcent: Przyjemny błękit
+    background = Color(0xFFF4F9FF), // Tło: Bardzo jasny, chłodny błękit
+    surface = Color(0xFFFFFFFF), // Powierzchnia (np. karty): Czysta biel dla kontrastu
+    onPrimary = Color.White, // Tekst na kolorze głównym (biały dla czytelności)
+    onSecondary = Color.White, // Tekst na kolorze dodatkowym
+    onBackground = Color(0xFF1A1C1E), // Tekst na tle (ciemnoszary)
+    onSurface = Color(0xFF1A1C1E) // Tekst na powierzchniach
 )
 
 @Composable

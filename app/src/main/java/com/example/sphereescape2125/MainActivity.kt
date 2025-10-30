@@ -21,11 +21,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.mazeapp.ui.theme.MazeAppTheme
 
+// NOWE IMPORTY:
+import androidx.compose.runtime.collectAsState        // Do zamiany Flow na State
+import androidx.lifecycle.viewmodel.compose.viewModel
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MazeAppTheme(darkTheme = true) {
+            // 1. Pobieramy instancję MainViewModel
+            val viewModel: MainViewModel = viewModel()
+
+            // 2. Obserwujemy StateFlow i zamieniamy go na State,
+            //    który Compose może odczytać.
+            //    'isDark' będzie automatycznie aktualizowane (true/false)
+            val isDark by viewModel.isDarkTheme.collectAsState()
+
+            // 3. Przekazujemy dynamiczną wartość 'isDark' zamiast 'true'
+            MazeAppTheme(darkTheme = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     SphereEscapeApp()
                 }
@@ -33,7 +46,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun SphereEscapeApp() {
     var screen by remember { mutableStateOf("menu") }

@@ -36,9 +36,11 @@ fun GameScreen(onBack: () -> Unit) {
 
     Box(
         modifier = Modifier
-            .background(Color(0xFF111111))
+            // 1. ZMIANA: Używamy koloru tła z motywu
+            .background(MaterialTheme.colorScheme.background)
             .fillMaxSize()
     ) {
+        // GameCanvas jest teraz w pełni oparty na motywie
         GameCanvas()
 
         Column(
@@ -54,7 +56,8 @@ fun GameScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontSize = 6.em,
                     textAlign = TextAlign.Center,
-                    color = Color.White
+                    // 2. ZMIANA: Kolor tekstu "na tle" z motywu
+                    color = MaterialTheme.colorScheme.onBackground
                 ),
             )
             Text(
@@ -62,18 +65,22 @@ fun GameScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontSize = 6.em,
                     textAlign = TextAlign.Center,
-                    color = Color.White
+                    // 3. ZMIANA: Kolor tekstu "na tle" z motywu
+                    color = MaterialTheme.colorScheme.onBackground
                 ),
             )
             Button(
                 onClick = onBack,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Red,
-                    contentColor = Color.White
+                    // 4. ZMIANA: Używamy głównego koloru akcentu
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Text("WRÓĆ", color = Color.White)
+                // 5. ZMIANA: Usunięto 'color = Color.White'
+                // Przycisk sam zarządza kolorem tekstu poprzez 'contentColor'
+                Text("WRÓĆ")
             }
         }
     }
@@ -97,6 +104,12 @@ fun GameCanvas() {
 
     val rings = remember { mutableStateListOf<RingObstacle>() }
 
+    // 6. ZMIANA: Pobieramy kolory z motywu raz, na początku
+    // Użyjemy 'error' dla przeszkód (zazwyczaj czerwony)
+    val obstacleColor = MaterialTheme.colorScheme.error
+    // Użyjemy 'secondary' dla kuli gracza (jako wyróżnienie)
+    val ballColor = MaterialTheme.colorScheme.secondary
+
     // Inicjalizacja pierścieni
     LaunchedEffect(Unit) {
         if (rings.isEmpty()) {
@@ -105,7 +118,8 @@ fun GameCanvas() {
                     center = Offset(600f, 800f),
                     outerRadius = 250f,
                     innerRadius = 200f,
-                    color = Color.Red,
+                    // 7. ZMIANA: Używamy koloru z motywu
+                    color = obstacleColor,
                     gaps = listOf(0f to 60f, 180f to 30f)
                 )
             )
@@ -116,7 +130,8 @@ fun GameCanvas() {
                     center = Offset(600f, 800f),
                     outerRadius = 500f,
                     innerRadius = 450f,
-                    color = Color.Red,
+                    // 8. ZMIANA: Używamy koloru z motywu
+                    color = obstacleColor,
                     gaps = listOf(0f to 60f, 180f to 30f)
                 )
             )
@@ -175,7 +190,8 @@ fun GameCanvas() {
                             center = Offset(600f, 800f),
                             outerRadius = 500f + 250f * ringCount,
                             innerRadius = 450f + 250f * ringCount,
-                            color = Color.Red,
+                            // 9. ZMIANA: Używamy koloru z motywu
+                            color = obstacleColor,
                             gaps = listOf(0f to 60f, 180f to 30f)
                         )
                     }
@@ -200,7 +216,8 @@ fun GameCanvas() {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            // 10. ZMIANA: Usunięto .background(Color.Black)
+            // Tło jest już dziedziczone z Box'a w 'GameScreen'
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
                     targetX = offset.x
@@ -211,7 +228,8 @@ fun GameCanvas() {
         rings.forEach { drawRingWithGaps(it) }
 
         drawCircle(
-            color = Color.Cyan,
+            // 11. ZMIANA: Używamy koloru kuli z motywu
+            color = ballColor,
             radius = ballRadius,
             center = Offset(ballX, ballY)
         )
