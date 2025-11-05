@@ -18,9 +18,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import android.util.Log
 
 import com.example.sphereescape2125.screens.obstacle.RingObstacle
+import com.example.sphereescape2125.screens.obstacle.WallObstacle
 import com.example.sphereescape2125.screens.obstacle.drawRingWithGaps
 import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithRing
-import kotlin.math.cos
+import com.example.sphereescape2125.screens.obstacle.drawWalls
+import com.example.sphereescape2125.screens.obstacle.generateWallsBetweenRings
+import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithWall
 
 
 @Composable
@@ -104,6 +107,8 @@ fun GameCanvas() {
     var targetY by remember { mutableFloatStateOf(ballY) }
 
     val rings = remember { mutableStateListOf<RingObstacle>() }
+    val walls = remember { mutableStateListOf<WallObstacle>() }
+
 
     // 6. ZMIANA: Pobieramy kolory z motywu raz, na początku
     // Użyjemy 'error' dla przeszkód (zazwyczaj czerwony)
@@ -167,7 +172,6 @@ fun GameCanvas() {
 
                 // kolizja (ściana pierścienia)
                 if (currentState.first && !currentState.second) {
-                    // odbicie — proste odwrócenie kierunku
                     ballX -= dx
                     ballY -= dy
                     targetX = ballX
@@ -199,6 +203,19 @@ fun GameCanvas() {
                 }
             }
 
+            for (wall in walls) {
+                if (isCircleCollidingWithWall(Offset(ballX, ballY), ballRadius, wall)) {
+                    // kolizja z ścianą
+                        // odbicie — proste odwrócenie kierunku
+                        ballX -= dx
+                        ballY -= dy
+                        targetX = ballX
+                        targetY = ballY
+                        Log.d("DEBUG_TAG", "Kula uderzyła w sciane")
+
+                }
+            }
+
             // dodaj nowy pierścień po zakończeniu iteracji
             ringToAdd?.let {
                 rings.add(it)
@@ -208,6 +225,19 @@ fun GameCanvas() {
             delay(16L)
         }
     }
+
+    LaunchedEffect(rings.size) {
+        if (rings.size > 1) {
+            val newWalls = generateWallsBetweenRings(
+                rings = rings,
+                existingWalls = walls,
+                wallsPerGap = 3
+            )
+
+            walls.addAll(newWalls)
+        }
+    }
+
 
     // Rysowanie
     Canvas(
@@ -222,13 +252,14 @@ fun GameCanvas() {
                 }
             }
     ) {
-        rings.forEach { drawRingWithGaps(it) }
-
         drawCircle(
             // 11. ZMIANA: Używamy koloru kuli z motywu
             color = ballColor,
             radius = ballRadius,
             center = Offset(ballX, ballY)
         )
+
+        rings.forEach { drawRingWithGaps(it) }
+        drawWalls(walls)
     }
 }

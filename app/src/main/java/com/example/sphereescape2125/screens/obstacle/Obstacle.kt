@@ -8,7 +8,8 @@ import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.random.Random
 
-const val gapSize = 80f
+
+const val gapSize = 120f
 
 data class RingObstacle(
     val center: Offset,
@@ -21,7 +22,7 @@ data class RingObstacle(
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
 
     init {
-        totalExits = (floor(((PI.toFloat() * innerRadius) / gapSize) / 3)).toInt()
+        totalExits = (floor(((PI.toFloat() * innerRadius) / gapSize) / 2)).toInt()
         for (i in 0 until totalExits) {
             val randStart = gapAngle + (360f / totalExits) * i
             val randStop = (360f / totalExits) - gapAngle + (360f / totalExits) * i
@@ -37,14 +38,11 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
     val innerRadius = obstacle.innerRadius
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
 
-
-
-
     // Dodanie przerw do listy segmentów
     for (gap in obstacle.gaps) {
 
         val gapStart = gap
-        var gapEnd = gapStart + gapAngle
+        var gapEnd = (gapStart + gapAngle) % 360f
 
         // Jeśli przerwa wychodzi poza 360°, dostosowujemy ją
         if (gapEnd > 360f) {
@@ -70,6 +68,7 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
     if (currentStartAngle < 360f) {
         filledAngles.add(currentStartAngle to 360f)
     }
+
 
     // Rysowanie segmentów wypełniających okrąg
     for ((startAngle, endAngle) in filledAngles) {
