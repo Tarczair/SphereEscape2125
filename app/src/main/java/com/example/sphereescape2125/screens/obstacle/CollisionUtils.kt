@@ -1,6 +1,7 @@
 package com.example.sphereescape2125.screens.obstacle
 
 import androidx.compose.ui.geometry.Offset
+import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.cos
 import kotlin.math.sin
@@ -16,16 +17,16 @@ fun isCircleCollidingWithRing(
     circleCenter: Offset,
     circleRadius: Float,
     ring: RingObstacle,
-    isTriggered: Boolean
 ): Pair<Boolean, Boolean> {
 
     val distance = hypot(
         circleCenter.x - ring.center.x,
         circleCenter.y - ring.center.y
     )
+    val gapSize = 80f
 
     // kula zbyt daleko lub zbyt blisko (poza pierścieniem)
-    if (distance + circleRadius < ring.innerRadius || distance - circleRadius > ring.outerRadius) {
+    if (distance + circleRadius < ring.innerRadius + 20 || distance - circleRadius > ring.outerRadius + 20) {
         return false to false
     }
 
@@ -39,8 +40,8 @@ fun isCircleCollidingWithRing(
 
     // sprawdzamy, czy kula jest w jednej z dziur (gapów)
     for (gap in ring.gaps) {
-        val gapStart = gap.first
-        val gapEnd = gap.first + gap.second
+        val gapStart = gap
+        val gapEnd = (gapSize / ring.innerRadius) * (180f / PI.toFloat())
 
         // obsługa przypadku, gdy dziura przekracza 360°
         val inGap = if (gapEnd > 360f) {

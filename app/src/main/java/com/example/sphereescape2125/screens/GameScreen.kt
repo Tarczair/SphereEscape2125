@@ -20,6 +20,7 @@ import android.util.Log
 import com.example.sphereescape2125.screens.obstacle.RingObstacle
 import com.example.sphereescape2125.screens.obstacle.drawRingWithGaps
 import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithRing
+import kotlin.math.cos
 
 
 @Composable
@@ -120,7 +121,6 @@ fun GameCanvas() {
                     innerRadius = 200f,
                     // 7. ZMIANA: Używamy koloru z motywu
                     color = obstacleColor,
-                    gaps = listOf(0f to 60f, 180f to 30f)
                 )
             )
             prevStates.add(false to false)
@@ -132,7 +132,6 @@ fun GameCanvas() {
                     innerRadius = 450f,
                     // 8. ZMIANA: Używamy koloru z motywu
                     color = obstacleColor,
-                    gaps = listOf(0f to 60f, 180f to 30f)
                 )
             )
             prevStates.add(false to false)
@@ -163,7 +162,6 @@ fun GameCanvas() {
                     Offset(ballX, ballY),
                     ballRadius,
                     ring,
-                    isTriggered[index]
                 )
                 val prevState = prevStates.getOrNull(index) ?: (false to false)
 
@@ -192,7 +190,6 @@ fun GameCanvas() {
                             innerRadius = 450f + 250f * ringCount,
                             // 9. ZMIANA: Używamy koloru z motywu
                             color = obstacleColor,
-                            gaps = listOf(0f to 60f, 180f to 30f)
                         )
                     }
                 }
