@@ -2,14 +2,14 @@ package com.example.sphereescape2125.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+// import androidx.compose.foundation.gestures.detectTapGestures // ZMIANA: Usunięte
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
+// import androidx.compose.ui.input.pointer.pointerInput // ZMIANA: Usunięte
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -23,6 +23,13 @@ import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithWall
 import kotlinx.coroutines.delay
 import android.util.Log
 import kotlin.math.hypot
+
+// --- NOWE IMPORTY ---
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
+// --- Koniec nowych importów ---
+
 
 @Composable
 fun GameScreen(onBack: () -> Unit) {
@@ -99,6 +106,20 @@ fun GameCanvas() {
     val obstacleColor = MaterialTheme.colorScheme.error
     val ballColor = MaterialTheme.colorScheme.secondary
 
+    // --- NOWOŚĆ: Integracja TiltSensor ---
+    val context = LocalContext.current
+    val tiltSensor = remember { TiltSensor(context) }
+
+    DisposableEffect(Unit) {
+        tiltSensor.startListening()
+        onDispose {
+            tiltSensor.stopListening()
+        }
+    }
+    // Czytamy dane z sensora jako stan Compose
+    val gravityData by tiltSensor.gravityData.collectAsState()
+    // --- Koniec integracji ---
+
     LaunchedEffect(Unit) {
         if (rings.isEmpty()) {
             rings.add(
@@ -127,27 +148,32 @@ fun GameCanvas() {
     var velocityY = 0f
     val acceleration = 0.5f
     val maxSpeed = 6f
-    val brakeMultiplier = 2f
-    var previousTargetX = targetX
-    var previousTargetY = targetY
+    // ZMIANA: Usunięto logikę hamowania po zmianie celu (niepotrzebna)
+    // val brakeMultiplier = 2f
+    // var previousTargetX = targetX
+    // var previousTargetY = targetY
 
     LaunchedEffect(Unit) {
         while (true) {
+            // --- ZMIANA: Ustawiamy cel (offset) z sensora ---
+            // Cel jest teraz "pływającym" punktem niedaleko kulki,
+            // sterowanym przez przechył telefonu.
+            val sensitivity = 100f // Dostosuj, jak daleko "ucieka" cel
+            targetX = ballX + (-gravityData.x * sensitivity)
+            targetY = ballY + (gravityData.y * sensitivity)
+            // --- Koniec zmiany ---
+
+
             var dxTotal = targetX - ballX
             var dyTotal = targetY - ballY
             val dist = kotlin.math.hypot(dxTotal, dyTotal)
 
             if (dist > 1f) {
-                // Sprawdzenie zmiany celu
-                val targetChanged = targetX != previousTargetX || targetY != previousTargetY
-                if (targetChanged) {
-                    velocityX /= brakeMultiplier
-                    velocityY /= brakeMultiplier
-                    previousTargetX = targetX
-                    previousTargetY = targetY
-                }
+                // ZMIANA: Usunięto logikę 'targetChanged', bo cel zmienia się co klatkę
+                // val targetChanged = ...
+                // if (targetChanged) { ... }
 
-                // Kierunek i przyspieszenie
+                // Kierunek i przyspieszenie (Twoja logika - zostaje)
                 val dirX = dxTotal / dist
                 val dirY = dyTotal / dist
                 val ax = dirX * acceleration
@@ -156,7 +182,7 @@ fun GameCanvas() {
                 velocityX += ax
                 velocityY += ay
 
-                // Ograniczenie prędkości
+                // Ograniczenie prędkości (Twoja logika - zostaje)
                 var speed = kotlin.math.hypot(velocityX, velocityY)
                 if (speed > maxSpeed) {
                     velocityX = (velocityX / speed) * maxSpeed
@@ -164,18 +190,18 @@ fun GameCanvas() {
                     speed = maxSpeed
                 }
 
-                // Hamowanie przy zbliżaniu się do celu
+                // Hamowanie przy zbliżaniu się do celu (Twoja logika - zostaje)
                 if (dist < 50f) {
                     val brakeFactor = dist / 50f
                     velocityX *= brakeFactor
                     velocityY *= brakeFactor
                 }
 
-                // Aktualizacja pozycji
+                // Aktualizacja pozycji (Twoja logika - zostaje)
                 ballX += velocityX
                 ballY += velocityY
             } else {
-                // Gdy kula dotrze do celu
+                // Gdy kula dotrze do celu (Twoja logika - zostaje)
                 ballX = targetX
                 ballY = targetY
                 velocityX = 0f
@@ -187,8 +213,11 @@ fun GameCanvas() {
 
             rings.forEachIndexed { index, ring ->
                 val currentState = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, ring)
-                val prevState = prevStates[index]
+                // ZMIANA: Bezpieczne pobranie stanu, aby uniknąć crashu
+                val prevState = prevStates.getOrNull(index) ?: (false to false)
+
                 if (currentState.first && !currentState.second) {
+                    // Twoja logika kolizji (odbicie) - zostaje
                     velocityX = -velocityX
                     velocityY = -velocityY
                     Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
@@ -203,11 +232,15 @@ fun GameCanvas() {
                         color = obstacleColor
                     )
                 }
-                prevStates[index] = currentState
+                // ZMIANA: Bezpieczny zapis stanu
+                if (index < prevStates.size) {
+                    prevStates[index] = currentState
+                }
             }
 
             for (wall in walls) {
                 if (isCircleCollidingWithWall(Offset(ballX, ballY), ballRadius, wall)) {
+                    // Twoja logika kolizji (odbicie) - zostaje
                     velocityX = -velocityX
                     velocityY = -velocityY
                 }
@@ -215,7 +248,7 @@ fun GameCanvas() {
 
             ringToAdd?.let {
                 rings.add(it)
-                prevStates.add(false to false)
+                prevStates.add(false to false) // To jest super - zostaje
             }
 
             delay(16L)
@@ -224,6 +257,7 @@ fun GameCanvas() {
 
     LaunchedEffect(rings.size) {
         if (rings.size > 1) {
+            // Twoja logika generowania ścian - zostaje
             val newWalls = generateWallsBetweenRings(
                 rings = rings,
                 existingWalls = walls,
@@ -237,15 +271,10 @@ fun GameCanvas() {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val canvasCenter = Offset(size.width / 2f, size.height / 2f)
-                    val worldOffset = offset - canvasCenter + Offset(ballX, ballY)
-                    targetX = worldOffset.x
-                    targetY = worldOffset.y
-                }
-            }
+        // ZMIANA: Usunięto .pointerInput(Unit)
+        // .pointerInput(Unit) { ... }
     ) {
+        // Twoja logika kamery - zostaje, jest idealna!
         val canvasCenter = Offset(size.width / 2f, size.height / 2f)
         val cameraOffset = canvasCenter - Offset(ballX, ballY)
         drawContext.canvas.save()
