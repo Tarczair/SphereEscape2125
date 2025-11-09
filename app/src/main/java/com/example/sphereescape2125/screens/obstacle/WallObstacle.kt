@@ -1,5 +1,6 @@
 package com.example.sphereescape2125.screens.obstacle
 
+import android.R
 import android.util.Log
 import androidx.compose.animation.core.repeatable
 import androidx.compose.ui.geometry.Offset
@@ -18,47 +19,98 @@ data class WallObstacle(
     val startRadius: Float,
     val endRadius: Float,
     val angle: Float,
-    val color: Color = Color.Gray,
+    val color: Color
 )
+
+fun adjustAngleOutsideGapsSector(
+    angle: Float,
+    current: RingObstacle,
+    next: RingObstacle,
+    minAngle: Float,
+    maxAngle: Float
+): Float {
+    var adjusted = angle
+
+    val allGaps = current.gaps.map { gap ->
+        gap - 5f to gap + (gapSize / current.innerRadius) * (180f / PI.toFloat()) + 5f
+    } + next.gaps.map { gap ->
+        gap - 5f to gap + (gapSize / next.innerRadius) * (180f / PI.toFloat()) + 5f
+    }
+
+    for ((start, end) in allGaps) {
+        if (adjusted in start..end) {
+            adjusted = end + 1f
+        }
+    }
+
+    // pilnujemy, żeby kąt nie wyszedł poza swój sektor
+    if (adjusted > maxAngle) adjusted = maxAngle - 1f
+    if (adjusted < minAngle) adjusted = minAngle + 1f
+
+    return ((adjusted * 10).toInt() / 10f)
+}
+
 
 fun generateWallsBetweenRings(
     rings: List<RingObstacle>,
     existingWalls: List<WallObstacle> = emptyList(),
-    wallsPerGap: Int = 2 // liczba ścian między pierścieniami
+    wallsPerGap: Int = 0,
+    color: Color = Color.Red
 ): List<WallObstacle> {
 
     val walls = mutableListOf<WallObstacle>()
+
+    val sectorSize = 360f / wallsPerGap
+
+    val allAngles = generateSequence(0f) { it + 0.1f }
+        .takeWhile { it < 360f }
+        .toList()
 
     for (i in 0 until rings.lastIndex) {
         val current = rings[i]
         val next = rings[i + 1]
 
-        val validAngles = (0..359).filter { angle ->
-            // sprawdź, czy kąt nie wpada w żaden gap
-            current.gaps.none { gap ->
+        if (current.wallsGenerated) continue
+
+        val validAngles = allAngles.filter { angle ->
+            val inCurrent = current.gaps.any { gap ->
                 val gapStart = gap - 5f
                 val gapEnd = gap + (gapSize / current.innerRadius) * (180f / PI.toFloat()) + 5f
-                angle.toFloat() in gapStart..gapEnd
+                angle in gapStart..gapEnd
             }
+
+            val inNext = next.gaps.any { gap ->
+                val gapStart = gap - 5f
+                val gapEnd = gap + (gapSize / next.innerRadius) * (180f / PI.toFloat()) + 5f
+                angle in gapStart..gapEnd
+            }
+
+            (!inCurrent && !inNext)
         }
 
+        if (validAngles.isEmpty()) continue
+        current.wallsGenerated = true
+
         repeat(wallsPerGap) { index ->
-            val minAngle = (360 / wallsPerGap) * index
-            val maxAngle = minAngle + (360 / wallsPerGap)
+            val minAngle = (sectorSize * index)
+            val maxAngle = minAngle + sectorSize
 
-            val alreadyHasWalls = existingWalls.any { it.startRing == current && it.endRing == next }
-            if (alreadyHasWalls) return@repeat
+            val filteredAngles = validAngles.filter { it in minAngle..maxAngle }
 
-            val filteredAngles = (validAngles).filter { angle -> angle in minAngle..maxAngle }
+            if (filteredAngles.isEmpty()) return@repeat
+
+            var baseAngle = filteredAngles.random()
+            baseAngle = (baseAngle * 10).toInt() / 10f
+
+            val adjustedAngle = adjustAngleOutsideGapsSector(baseAngle, current, next, minAngle, maxAngle)
+
             if (filteredAngles.isNotEmpty()) {
-                val angle = filteredAngles.random().toFloat()
 
-                // losowy typ ściany: łącząca, pół, lub przesunięta
-                val type = Random.nextInt(3)
+                val type = Random.nextInt(4)
 
                 val (startR, endR) = when (type) {
-                    0 -> current.outerRadius + 20 to next.innerRadius + 25 // pełna ściana
-                    1 -> current.outerRadius + 20 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 30 // połowa
+                    0, 1, -> current.outerRadius + 20 to next.innerRadius + 25 // pełna ściana
+                    2-> current.outerRadius + 20 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 30 // połowa
                     else -> next.innerRadius + 25  to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10 // połowa
                 }
 
@@ -68,7 +120,8 @@ fun generateWallsBetweenRings(
                         endRing = next,
                         startRadius = startR,
                         endRadius = endR,
-                        angle = angle
+                        angle = adjustedAngle % 360f,
+                        color = color
                     )
                 )
             }

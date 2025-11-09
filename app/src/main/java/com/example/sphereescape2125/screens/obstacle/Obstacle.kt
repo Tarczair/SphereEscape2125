@@ -16,18 +16,23 @@ data class RingObstacle(
     val outerRadius: Float,
     val innerRadius: Float,
     val color: Color = Color.Red,
+    var wallsGenerated: Boolean = false
 ) {
     var totalExits: Int = 0
     var gaps: MutableList<Float> = mutableListOf()
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
 
     init {
-        totalExits = (floor(((PI.toFloat() * innerRadius) / gapSize) / 2)).toInt()
+        totalExits = (floor(((PI.toFloat() * innerRadius) / gapSize) / 6)).toInt() + 2
         for (i in 0 until totalExits) {
             val randStart = gapAngle + (360f / totalExits) * i
             val randStop = (360f / totalExits) - gapAngle + (360f / totalExits) * i
 
-            val random: Float = randStart + Random.nextFloat() * (randStop - randStart)
+            val random = (Random.nextInt(
+                ((randStart * 10).toInt()),
+                ((randStop * 10).toInt() + 1)
+            )) / 10f
+
             gaps.add(random)
         }
     }
