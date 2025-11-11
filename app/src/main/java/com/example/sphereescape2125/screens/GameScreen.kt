@@ -19,7 +19,6 @@ import com.example.sphereescape2125.screens.obstacle.drawRingWithGaps
 import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithRing
 import com.example.sphereescape2125.screens.obstacle.drawWalls
 import com.example.sphereescape2125.screens.obstacle.generateWallsBetweenRings
-import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithWall
 import kotlinx.coroutines.delay
 import android.util.Log
 import kotlin.math.hypot
@@ -28,6 +27,7 @@ import kotlin.math.hypot
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
+import com.example.sphereescape2125.screens.obstacle.getWallCollisionInfo // WAŻNY IMPORT!
 // --- Koniec nowych importów ---
 
 
@@ -94,11 +94,12 @@ fun GameCanvas() {
     var ringCount by remember { mutableIntStateOf(0) }
     val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
 
+    // --- Pozycja kulki w 'remember' ---
     var ballX by remember { mutableFloatStateOf(600f) }
     var ballY by remember { mutableFloatStateOf(800f) }
     val ballRadius = 40f
-    var targetX by remember { mutableFloatStateOf(ballX) }
-    var targetY by remember { mutableFloatStateOf(ballY) }
+
+    // --- Usunięto targetX i targetY ---
 
     val rings = remember { mutableStateListOf<RingObstacle>() }
     val walls = remember { mutableStateListOf<WallObstacle>() }
@@ -106,7 +107,7 @@ fun GameCanvas() {
     val obstacleColor = MaterialTheme.colorScheme.error
     val ballColor = MaterialTheme.colorScheme.secondary
 
-    // --- NOWOŚĆ: Integracja TiltSensor ---
+    // --- Integracja TiltSensor (bez zmian) ---
     val context = LocalContext.current
     val tiltSensor = remember { TiltSensor(context) }
 
@@ -116,8 +117,7 @@ fun GameCanvas() {
             tiltSensor.stopListening()
         }
     }
-    // Czytamy dane z sensora jako stan Compose
-    val gravityData by tiltSensor.gravityData.collectAsState()
+    val gravityData by tiltSensor.gravityData.collectAsState() // DOBRZE
     // --- Koniec integracji ---
 
     LaunchedEffect(Unit) {
@@ -144,83 +144,71 @@ fun GameCanvas() {
         }
     }
 
-    var velocityX = 0f
-    var velocityY = 0f
-    val acceleration = 0.5f
-    val maxSpeed = 6f
-    // ZMIANA: Usunięto logikę hamowania po zmianie celu (niepotrzebna)
-    // val brakeMultiplier = 2f
-    // var previousTargetX = targetX
-    // var previousTargetY = targetY
+    // --- Prędkość w 'remember' ---
+    var velocityX by remember { mutableFloatStateOf(0f) }
+    var velocityY by remember { mutableFloatStateOf(0f) }
+
+
+
+// --- NOWE STAŁE FIZYKI ---
+    val accelerationFactor = 0.5f // Jeszcze mniejsza czułość (mniej "rwie")
+    val friction = 0.96f          // Wyraźnie większe tarcie (kulka "walczy" z ruchem)
+    val maxSpeed = 4f             // Niska prędkość maksymalna (powinna być "spacerowa")
+
+    // ---  NOWA LINIA: KALIBRACJA POZYCJI "ZERO" ---
+    // Ustawia "zero" na lekki przechył. 0.0f = idealnie płasko. 9.8f = idealnie pionowo.
+    // Musisz poeksperymentować z tą wartością!
+    val CALIBRATION_OFFSET_Y = 4f
 
     LaunchedEffect(Unit) {
         while (true) {
-            // --- ZMIANA: Ustawiamy cel (offset) z sensora ---
-            // Cel jest teraz "pływającym" punktem niedaleko kulki,
-            // sterowanym przez przechył telefonu.
-            val sensitivity = 100f // Dostosuj, jak daleko "ucieka" cel
-            targetX = ballX + (-gravityData.x * sensitivity)
-            targetY = ballY + (gravityData.y * sensitivity)
-            // --- Koniec zmiany ---
 
+            // --- NOWA, BEZPOŚREDNIA LOGIKA RUCHU ---
 
-            var dxTotal = targetX - ballX
-            var dyTotal = targetY - ballY
-            val dist = kotlin.math.hypot(dxTotal, dyTotal)
+            // 1. Użyj danych z sensora jako bezpośredniego przyspieszenia.
+            val ax = -gravityData.x * accelerationFactor
+            // --- MODYFIKACJA ---
+            // Odczyt z grawitacji 'Y' jest korygowany o nasz offset
+            val ay = (gravityData.y - CALIBRATION_OFFSET_Y) * accelerationFactor
+            // -------------------
 
-            if (dist > 1f) {
-                // ZMIANA: Usunięto logikę 'targetChanged', bo cel zmienia się co klatkę
-                // val targetChanged = ...
-                // if (targetChanged) { ... }
+            // 2. Dodaj przyspieszenie do aktualnej prędkości
+            velocityX += ax
+            velocityY += ay
 
-                // Kierunek i przyspieszenie (Twoja logika - zostaje)
-                val dirX = dxTotal / dist
-                val dirY = dyTotal / dist
-                val ax = dirX * acceleration
-                val ay = dirY * acceleration
+            // 3. Zastosuj tarcie (opór)
+            velocityX *= friction
+            velocityY *= friction
 
-                velocityX += ax
-                velocityY += ay
-
-                // Ograniczenie prędkości (Twoja logika - zostaje)
-                var speed = kotlin.math.hypot(velocityX, velocityY)
-                if (speed > maxSpeed) {
-                    velocityX = (velocityX / speed) * maxSpeed
-                    velocityY = (velocityY / speed) * maxSpeed
-                    speed = maxSpeed
-                }
-
-                // Hamowanie przy zbliżaniu się do celu (Twoja logika - zostaje)
-                if (dist < 50f) {
-                    val brakeFactor = dist / 50f
-                    velocityX *= brakeFactor
-                    velocityY *= brakeFactor
-                }
-
-                // Aktualizacja pozycji (Twoja logika - zostaje)
-                ballX += velocityX
-                ballY += velocityY
-            } else {
-                // Gdy kula dotrze do celu (Twoja logika - zostaje)
-                ballX = targetX
-                ballY = targetY
-                velocityX = 0f
-                velocityY = 0f
-                Log.d("DEBUG_TAG", "Kula stoi w miejscu")
+            // 4. Ogranicz maksymalną prędkość
+            val speed = hypot(velocityX, velocityY)
+            if (speed > maxSpeed) {
+                velocityX = (velocityX / speed) * maxSpeed
+                velocityY = (velocityY / speed) * maxSpeed
             }
 
+            // 5. Zaktualizuj pozycję kulki na podstawie finalnej prędkości
+            ballX += velocityX
+            ballY += velocityY
+
+            // --- KONIEC NOWEJ LOGIKI RUCHU ---
+
+
+            // --- Logika kolizji z pierścieniami (bez zmian) ---
             var ringToAdd: RingObstacle? = null
 
             rings.forEachIndexed { index, ring ->
                 val currentState = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, ring)
-                // ZMIANA: Bezpieczne pobranie stanu, aby uniknąć crashu
                 val prevState = prevStates.getOrNull(index) ?: (false to false)
 
                 if (currentState.first && !currentState.second) {
-                    // Twoja logika kolizji (odbicie) - zostaje
-                    velocityX = -velocityX
-                    velocityY = -velocityY
+                    // Odbicie od pierścienia z utratą energii (0.8f)
+                    velocityX = -velocityX * 0.8f
+                    velocityY = -velocityY * 0.8f
                     Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
+
+                    ballX += velocityX // Lekkie wypchnięcie
+                    ballY += velocityY
                 }
                 if (prevState.second && !currentState.second && !isTriggered[index]) {
                     isTriggered[index] = true
@@ -232,26 +220,69 @@ fun GameCanvas() {
                         color = obstacleColor
                     )
                 }
-                // ZMIANA: Bezpieczny zapis stanu
                 if (index < prevStates.size) {
                     prevStates[index] = currentState
                 }
             }
 
+            // W pliku: GameScreen.kt
+
+            // --- NOWA, OSTATECZNA FIZYKA KOLIZJI ZE ŚCIANĄ ---
             for (wall in walls) {
-                if (isCircleCollidingWithWall(Offset(ballX, ballY), ballRadius, wall)) {
-                    // Twoja logika kolizji (odbicie) - zostaje
-                    velocityX = -velocityX
-                    velocityY = -velocityY
+                // Używamy naszej nowej, stabilnej funkcji detekcji
+                val collisionInfo = getWallCollisionInfo(
+                    circleCenter = Offset(ballX, ballY),
+                    circleRadius = ballRadius,
+                    wall = wall
+                )
+
+                if (collisionInfo != null) {
+                    // Mamy kolizję!
+                    val (closestPoint, distance, normal) = collisionInfo // Teraz mamy 'normal'
+                    val wallHalfWidth = 25f
+                    val collisionThreshold = ballRadius + wallHalfWidth
+
+                    // 1. Oblicz głębokość penetracji
+                    // Dodajemy mały bufor 0.01f, aby uniknąć "drżenia"
+                    val penetrationDepth = (collisionThreshold - distance) + 0.01f
+
+                    // 2. Wypchnij kulkę ze ściany (zapobiega utknięciu)
+                    // Ta część jest kluczowa i musi być zrobiona NAJPIERW
+                    ballX += normal.x * penetrationDepth
+                    ballY += normal.y * penetrationDepth
+
+                    // 3. Oblicz PRAWIDŁOWĄ reakcję na prędkość (Model "Constraint")
+
+                    // 3a. Oblicz iloczyn skalarny prędkości i normalnej
+                    val dot = (velocityX * normal.x) + (velocityY * normal.y)
+
+                    // 3b. Reaguj TYLKO jeśli kulka leci W STRONĘ ściany (dot < 0)
+                    if (dot < 0) {
+                        // 3c. Anuluj prędkość prostopadłą i zastosuj odbicie (bounciness)
+                        // To jest wzór na pełną reakcję (odbicie + ślizg)
+                        // v_nowe = v - (1 + bounciness) * dot(v, n) * n
+
+                        val bounciness = 0.6f // Zmniejszyłem odbicie, aby było mniej "sprężyste"
+                        val restitution = 1.0f + bounciness
+
+                        val reflectVx = velocityX - (restitution * dot * normal.x)
+                        val reflectVy = velocityY - (restitution * dot * normal.y)
+
+                        velocityX = reflectVx
+                        velocityY = reflectVy
+                    }
+                    // Jeśli dot >= 0, kulka już się oddala (lub ślizga).
+                    // Samo wypchnięcie pozycyjne wystarczy. Nie ruszamy prędkości.
                 }
-            }
+            } // --- Koniec pętli for (wall in walls) ---
+
 
             ringToAdd?.let {
                 rings.add(it)
-                prevStates.add(false to false) // To jest super - zostaje
+                prevStates.add(false to false)
             }
 
-            delay(16L)
+            delay(16L) // Dąży do ~60 klatek na sekundę
         }
     }
 
@@ -271,10 +302,8 @@ fun GameCanvas() {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-        // ZMIANA: Usunięto .pointerInput(Unit)
-        // .pointerInput(Unit) { ... }
     ) {
-        // Twoja logika kamery - zostaje, jest idealna!
+        // Twoja logika kamery - zostaje
         val canvasCenter = Offset(size.width / 2f, size.height / 2f)
         val cameraOffset = canvasCenter - Offset(ballX, ballY)
         drawContext.canvas.save()
