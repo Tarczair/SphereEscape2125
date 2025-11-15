@@ -2,14 +2,14 @@ package com.example.sphereescape2125.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+// import androidx.compose.foundation.gestures.detectTapGestures // ZMIANA: Usunięte
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
+// import androidx.compose.ui.input.pointer.pointerInput // ZMIANA: Usunięte
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -19,10 +19,19 @@ import com.example.sphereescape2125.screens.obstacle.drawRingWithGaps
 import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithRing
 import com.example.sphereescape2125.screens.obstacle.drawWalls
 import com.example.sphereescape2125.screens.obstacle.generateWallsBetweenRings
-import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithWall
 import kotlinx.coroutines.delay
 import android.util.Log
 import kotlin.math.hypot
+
+// --- NOWE IMPORTY ---
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
+import com.example.sphereescape2125.screens.obstacle.getWallCollisionInfo // WAŻNY IMPORT!
+import kotlin.math.abs
+
+// --- Koniec nowych importów ---
+
 
 @Composable
 fun GameScreen(onBack: () -> Unit) {
@@ -87,17 +96,31 @@ fun GameCanvas() {
     var ringCount by remember { mutableIntStateOf(0) }
     val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
 
+    // --- Pozycja kulki w 'remember' ---
     var ballX by remember { mutableFloatStateOf(600f) }
     var ballY by remember { mutableFloatStateOf(800f) }
     val ballRadius = 40f
-    var targetX by remember { mutableFloatStateOf(ballX) }
-    var targetY by remember { mutableFloatStateOf(ballY) }
+
+    // --- Usunięto targetX i targetY ---
 
     val rings = remember { mutableStateListOf<RingObstacle>() }
     val walls = remember { mutableStateListOf<WallObstacle>() }
 
     val obstacleColor = MaterialTheme.colorScheme.error
     val ballColor = MaterialTheme.colorScheme.secondary
+
+    // --- Integracja TiltSensor (bez zmian) ---
+    val context = LocalContext.current
+    val tiltSensor = remember { TiltSensor(context) }
+
+    DisposableEffect(Unit) {
+        tiltSensor.startListening()
+        onDispose {
+            tiltSensor.stopListening()
+        }
+    }
+    val gravityData by tiltSensor.gravityData.collectAsState() // DOBRZE
+    // --- Koniec integracji ---
 
     LaunchedEffect(Unit) {
         if (rings.isEmpty()) {
@@ -123,75 +146,170 @@ fun GameCanvas() {
         }
     }
 
-    var velocityX = 0f
-    var velocityY = 0f
-    val acceleration = 0.5f
-    val maxSpeed = 6f
-    val brakeMultiplier = 2f
-    var previousTargetX = targetX
-    var previousTargetY = targetY
+    // --- Prędkość w 'remember' ---
+    var velocityX by remember { mutableFloatStateOf(0f) }
+    var velocityY by remember { mutableFloatStateOf(0f) }
+
+
+
+// --- NOWE STAŁE FIZYKI ---
+    val accelerationFactor = 0.5f // Jeszcze mniejsza czułość (mniej "rwie")
+    val friction = 0.96f          // Wyraźnie większe tarcie (kulka "walczy" z ruchem)
+    val maxSpeed = 4f             // Niska prędkość maksymalna (powinna być "spacerowa")
+
+    // ---  NOWA LINIA: KALIBRACJA POZYCJI "ZERO" ---
+    // Ustawia "zero" na lekki przechył. 0.0f = idealnie płasko. 9.8f = idealnie pionowo.
+    // Musisz poeksperymentować z tą wartością!
+    val CALIBRATION_OFFSET_Y = 4f
 
     LaunchedEffect(Unit) {
         while (true) {
-            var dxTotal = targetX - ballX
-            var dyTotal = targetY - ballY
-            val dist = kotlin.math.hypot(dxTotal, dyTotal)
 
-            if (dist > 1f) {
-                // Sprawdzenie zmiany celu
-                val targetChanged = targetX != previousTargetX || targetY != previousTargetY
-                if (targetChanged) {
-                    velocityX /= brakeMultiplier
-                    velocityY /= brakeMultiplier
-                    previousTargetX = targetX
-                    previousTargetY = targetY
-                }
+            // --- NOWA, BEZPOŚREDNIA LOGIKA RUCHU ---
 
-                // Kierunek i przyspieszenie
-                val dirX = dxTotal / dist
-                val dirY = dyTotal / dist
-                val ax = dirX * acceleration
-                val ay = dirY * acceleration
+            // 1. Użyj danych z sensora jako bezpośredniego przyspieszenia.
+            val ax = -gravityData.x * accelerationFactor
+            // --- MODYFIKACJA ---
+            // Odczyt z grawitacji 'Y' jest korygowany o nasz offset
+            val ay = (gravityData.y - CALIBRATION_OFFSET_Y) * accelerationFactor
+            // -------------------
 
-                velocityX += ax
-                velocityY += ay
+            // 2. Dodaj przyspieszenie do aktualnej prędkości
+            velocityX += ax
+            velocityY += ay
 
-                // Ograniczenie prędkości
-                var speed = kotlin.math.hypot(velocityX, velocityY)
-                if (speed > maxSpeed) {
-                    velocityX = (velocityX / speed) * maxSpeed
-                    velocityY = (velocityY / speed) * maxSpeed
-                    speed = maxSpeed
-                }
+            // 3. Zastosuj tarcie (opór)
+            velocityX *= friction
+            velocityY *= friction
 
-                // Hamowanie przy zbliżaniu się do celu
-                if (dist < 50f) {
-                    val brakeFactor = dist / 50f
-                    velocityX *= brakeFactor
-                    velocityY *= brakeFactor
-                }
-
-                // Aktualizacja pozycji
-                ballX += velocityX
-                ballY += velocityY
-            } else {
-                // Gdy kula dotrze do celu
-                ballX = targetX
-                ballY = targetY
-                velocityX = 0f
-                velocityY = 0f
-                Log.d("DEBUG_TAG", "Kula stoi w miejscu")
+            // 4. Ogranicz maksymalną prędkość
+            val speed = hypot(velocityX, velocityY)
+            if (speed > maxSpeed) {
+                velocityX = (velocityX / speed) * maxSpeed
+                velocityY = (velocityY / speed) * maxSpeed
             }
 
+            // 5. Zaktualizuj pozycję kulki na podstawie finalnej prędkości
+            ballX += velocityX
+            ballY += velocityY
+
+            // --- KONIEC NOWEJ LOGIKI RUCHU ---
+
+
+            // --- Logika kolizji z pierścieniami (bez zmian) ---
             var ringToAdd: RingObstacle? = null
 
             rings.forEachIndexed { index, ring ->
                 val currentState = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, ring)
-                val prevState = prevStates[index]
+                val prevState = prevStates.getOrNull(index) ?: (false to false)
+
+                //if (currentState.first && !currentState.second) {
+                    // Odbicie od pierścienia z utratą energii (0.8f)
+                   // velocityX = -velocityX * 0.8f
+                    //velocityY = -velocityY * 0.8f
+                    //Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
+
+                    //ballX += velocityX // Lekkie wypchnięcie
+                    //ballY += velocityY
+                //}
+
+                // W pliku GameScreen.kt, wewnątrz pętli rings.forEachIndexed
+
+                // W pliku GameScreen.kt, w pętli rings.forEachIndexed...
+
                 if (currentState.first && !currentState.second) {
-                    velocityX = -velocityX
-                    velocityY = -velocityY
-                    Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
+                    // Sprawdza kolizję, ale nie jest w dziurze
+
+                    // 1. Oblicz wektor normalny (od środka pierścienia DO środka kulki)
+                    val normalX_raw = ballX - ring.center.x
+                    val normalY_raw = ballY - ring.center.y
+                    val distance = hypot(normalX_raw, normalY_raw)
+
+                    if (distance == 0f) {
+                        Log.d("DEBUG_TAG", "Kolizja w centrum pierścienia, pomijam")
+                        return@forEachIndexed // Poprawka z 'continue'
+                    }
+
+                    // Znormalizowany wektor (zawsze wskazuje OD środka pierścienia na zewnątrz)
+                    val normalX = normalX_raw / distance
+                    val normalY = normalY_raw / distance
+
+                    // --- NOWA, KLUCZOWA LOGIKA: Sprawdź, w którą ścianę uderzamy ---
+
+                    // Obliczamy "bliskość" kulki do obu ścian pierścienia.
+                    val proximityToInner = abs(distance - ring.innerRadius)
+                    val proximityToOuter = abs(distance - ring.outerRadius)
+
+                    // Iloczyn skalarny (pokazuje, czy prędkość jest "zgodna" z normalną)
+                    val dot = (velocityX * normalX) + (velocityY * normalY)
+
+                    if (proximityToInner < proximityToOuter) {
+                        // *** PRZYPADEK 1: ŚCIANA WEWNĘTRZNA (CZERWONA - WYPUKŁA) ***
+                        // (Kulka jest wewnątrz pierścienia i leci na zewnątrz)
+
+                        // 2. Rozwiąż penetrację (Wypchnij kulkę DO ŚRODKA)
+                        val penetrationDepth = (distance + ballRadius) - ring.innerRadius
+
+                        if (penetrationDepth > 0) {
+                            val correction = (penetrationDepth + 0.01f)
+                            ballX -= normalX * correction
+                            ballY -= normalY * correction
+                        }
+
+                        // 3. Reaguj na prędkość (TYLKO jeśli leci NA ZEWNĄTRZ, czyli dot > 0)
+                        if (dot > 0) {
+                            // --- POPRAWKA: UŻYWAMY TEJ SAMEJ LOGIKI "ŚLIZGU" CO NA ZEWNĘTRZNEJ ---
+                            // To pozwoli kulce "ślizgać się" po wypukłej powierzchni,
+                            // zamiast być od niej "kopaną".
+
+                            val bounciness = 0.0f // CHCEMY IDEALNY ŚLIZG
+
+                            val normalVelocityX = dot * normalX
+                            val normalVelocityY = dot * normalY
+                            val tangentVelocityX = velocityX - normalVelocityX
+                            val tangentVelocityY = velocityY - normalVelocityY
+
+                            // Odbijamy tylko składową normalną (z bounciness = 0.0, to ją po prostu zeruje)
+                            val reflectedNormalVx = -normalVelocityX * bounciness
+                            val reflectedNormalVy = -normalVelocityY * bounciness
+
+                            // Nowa prędkość to stara styczna + odbita (wyzerowana) normalna
+                            velocityX = tangentVelocityX + reflectedNormalVx
+                            velocityY = tangentVelocityY + reflectedNormalVy
+                            // --- KONIEC POPRAWKI ---
+                        }
+
+                    } else {
+                        // *** PRZYPADEK 2: ŚCIANA ZEWNĘTRZNA (ZIELONA - WKLĘSŁA) ***
+                        // (Kulka jest na zewnątrz pierścienia i leci do środka)
+
+                        // 2. Rozwiąż penetrację (Wypchnij kulkę NA ZEWNĄTRZ)
+                        val penetrationDepth = (ring.outerRadius + ballRadius) - distance
+
+                        if (penetrationDepth > 0) {
+                            val correction = (penetrationDepth + 0.01f)
+                            ballX += normalX * correction // <-- ZNAK PLUS
+                            ballY += normalY * correction // <-- ZNAK PLUS
+                        }
+
+                        // 3. Reaguj na prędkość (TYLKO jeśli leci DO ŚRODKA, czyli dot < 0)
+                        if (dot < 0) {
+                            // --- UŻYWAMY LOGIKI "SLIDE", KTÓRA TU DZIAŁA ---
+                            val bounciness = 0.0f // CHCEMY IDEALNY ŚLIZG
+
+                            val normalVelocityX = dot * normalX
+                            val normalVelocityY = dot * normalY
+                            val tangentVelocityX = velocityX - normalVelocityX
+                            val tangentVelocityY = velocityY - normalVelocityY
+
+                            val reflectedNormalVx = -normalVelocityX * bounciness
+                            val reflectedNormalVy = -normalVelocityY * bounciness
+
+                            velocityX = tangentVelocityX + reflectedNormalVx
+                            velocityY = tangentVelocityY + reflectedNormalVy
+                        }
+                    }
+                    // --- KONIEC NOWEJ LOGIKI ---
                 }
                 if (prevState.second && !currentState.second && !isTriggered[index]) {
                     isTriggered[index] = true
@@ -203,27 +321,75 @@ fun GameCanvas() {
                         color = obstacleColor
                     )
                 }
-                prevStates[index] = currentState
-            }
-
-            for (wall in walls) {
-                if (isCircleCollidingWithWall(Offset(ballX, ballY), ballRadius, wall)) {
-                    velocityX = -velocityX
-                    velocityY = -velocityY
+                if (index < prevStates.size) {
+                    prevStates[index] = currentState
                 }
             }
+
+            // W pliku: GameScreen.kt
+
+            // --- NOWA, OSTATECZNA FIZYKA KOLIZJI ZE ŚCIANĄ ---
+            for (wall in walls) {
+                // Używamy naszej nowej, stabilnej funkcji detekcji
+                val collisionInfo = getWallCollisionInfo(
+                    circleCenter = Offset(ballX, ballY),
+                    circleRadius = ballRadius,
+                    wall = wall
+                )
+
+                if (collisionInfo != null) {
+                    // Mamy kolizję!
+                    val (closestPoint, distance, normal) = collisionInfo // Teraz mamy 'normal'
+                    val wallHalfWidth = 25f
+                    val collisionThreshold = ballRadius + wallHalfWidth
+
+                    // 1. Oblicz głębokość penetracji
+                    // Dodajemy mały bufor 0.01f, aby uniknąć "drżenia"
+                    val penetrationDepth = (collisionThreshold - distance) + 0.01f
+
+                    // 2. Wypchnij kulkę ze ściany (zapobiega utknięciu)
+                    // Ta część jest kluczowa i musi być zrobiona NAJPIERW
+                    ballX += normal.x * penetrationDepth
+                    ballY += normal.y * penetrationDepth
+
+                    // 3. Oblicz PRAWIDŁOWĄ reakcję na prędkość (Model "Constraint")
+
+                    // 3a. Oblicz iloczyn skalarny prędkości i normalnej
+                    val dot = (velocityX * normal.x) + (velocityY * normal.y)
+
+                    // 3b. Reaguj TYLKO jeśli kulka leci W STRONĘ ściany (dot < 0)
+                    if (dot < 0) {
+                        // 3c. Anuluj prędkość prostopadłą i zastosuj odbicie (bounciness)
+                        // To jest wzór na pełną reakcję (odbicie + ślizg)
+                        // v_nowe = v - (1 + bounciness) * dot(v, n) * n
+
+                        val bounciness = 0.6f // Zmniejszyłem odbicie, aby było mniej "sprężyste"
+                        val restitution = 1.0f + bounciness
+
+                        val reflectVx = velocityX - (restitution * dot * normal.x)
+                        val reflectVy = velocityY - (restitution * dot * normal.y)
+
+                        velocityX = reflectVx
+                        velocityY = reflectVy
+                    }
+                    // Jeśli dot >= 0, kulka już się oddala (lub ślizga).
+                    // Samo wypchnięcie pozycyjne wystarczy. Nie ruszamy prędkości.
+                }
+            } // --- Koniec pętli for (wall in walls) ---
+
 
             ringToAdd?.let {
                 rings.add(it)
                 prevStates.add(false to false)
             }
 
-            delay(16L)
+            delay(16L) // Dąży do ~60 klatek na sekundę
         }
     }
 
     LaunchedEffect(rings.size) {
         if (rings.size > 1) {
+            // Twoja logika generowania ścian - zostaje
             val newWalls = generateWallsBetweenRings(
                 rings = rings,
                 existingWalls = walls,
@@ -237,15 +403,8 @@ fun GameCanvas() {
     Canvas(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val canvasCenter = Offset(size.width / 2f, size.height / 2f)
-                    val worldOffset = offset - canvasCenter + Offset(ballX, ballY)
-                    targetX = worldOffset.x
-                    targetY = worldOffset.y
-                }
-            }
     ) {
+        // Twoja logika kamery - zostaje
         val canvasCenter = Offset(size.width / 2f, size.height / 2f)
         val cameraOffset = canvasCenter - Offset(ballX, ballY)
         drawContext.canvas.save()
