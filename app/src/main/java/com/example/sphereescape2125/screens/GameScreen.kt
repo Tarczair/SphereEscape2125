@@ -28,6 +28,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
 import com.example.sphereescape2125.screens.obstacle.getWallCollisionInfo // WAŻNY IMPORT!
+import kotlin.math.abs
+
 // --- Koniec nowych importów ---
 
 
@@ -201,14 +203,113 @@ fun GameCanvas() {
                 val currentState = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, ring)
                 val prevState = prevStates.getOrNull(index) ?: (false to false)
 
-                if (currentState.first && !currentState.second) {
+                //if (currentState.first && !currentState.second) {
                     // Odbicie od pierścienia z utratą energii (0.8f)
-                    velocityX = -velocityX * 0.8f
-                    velocityY = -velocityY * 0.8f
-                    Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
+                   // velocityX = -velocityX * 0.8f
+                    //velocityY = -velocityY * 0.8f
+                    //Log.d("DEBUG_TAG", "Kula uderzyła w pierścień $index")
 
-                    ballX += velocityX // Lekkie wypchnięcie
-                    ballY += velocityY
+                    //ballX += velocityX // Lekkie wypchnięcie
+                    //ballY += velocityY
+                //}
+
+                // W pliku GameScreen.kt, wewnątrz pętli rings.forEachIndexed
+
+                // W pliku GameScreen.kt, w pętli rings.forEachIndexed...
+
+                if (currentState.first && !currentState.second) {
+                    // Sprawdza kolizję, ale nie jest w dziurze
+
+                    // 1. Oblicz wektor normalny (od środka pierścienia DO środka kulki)
+                    val normalX_raw = ballX - ring.center.x
+                    val normalY_raw = ballY - ring.center.y
+                    val distance = hypot(normalX_raw, normalY_raw)
+
+                    if (distance == 0f) {
+                        Log.d("DEBUG_TAG", "Kolizja w centrum pierścienia, pomijam")
+                        return@forEachIndexed // Poprawka z 'continue'
+                    }
+
+                    // Znormalizowany wektor (zawsze wskazuje OD środka pierścienia na zewnątrz)
+                    val normalX = normalX_raw / distance
+                    val normalY = normalY_raw / distance
+
+                    // --- NOWA, KLUCZOWA LOGIKA: Sprawdź, w którą ścianę uderzamy ---
+
+                    // Obliczamy "bliskość" kulki do obu ścian pierścienia.
+                    val proximityToInner = abs(distance - ring.innerRadius)
+                    val proximityToOuter = abs(distance - ring.outerRadius)
+
+                    // Iloczyn skalarny (pokazuje, czy prędkość jest "zgodna" z normalną)
+                    val dot = (velocityX * normalX) + (velocityY * normalY)
+
+                    if (proximityToInner < proximityToOuter) {
+                        // *** PRZYPADEK 1: ŚCIANA WEWNĘTRZNA (CZERWONA - WYPUKŁA) ***
+                        // (Kulka jest wewnątrz pierścienia i leci na zewnątrz)
+
+                        // 2. Rozwiąż penetrację (Wypchnij kulkę DO ŚRODKA)
+                        val penetrationDepth = (distance + ballRadius) - ring.innerRadius
+
+                        if (penetrationDepth > 0) {
+                            val correction = (penetrationDepth + 0.01f)
+                            ballX -= normalX * correction
+                            ballY -= normalY * correction
+                        }
+
+                        // 3. Reaguj na prędkość (TYLKO jeśli leci NA ZEWNĄTRZ, czyli dot > 0)
+                        if (dot > 0) {
+                            // --- POPRAWKA: UŻYWAMY TEJ SAMEJ LOGIKI "ŚLIZGU" CO NA ZEWNĘTRZNEJ ---
+                            // To pozwoli kulce "ślizgać się" po wypukłej powierzchni,
+                            // zamiast być od niej "kopaną".
+
+                            val bounciness = 0.0f // CHCEMY IDEALNY ŚLIZG
+
+                            val normalVelocityX = dot * normalX
+                            val normalVelocityY = dot * normalY
+                            val tangentVelocityX = velocityX - normalVelocityX
+                            val tangentVelocityY = velocityY - normalVelocityY
+
+                            // Odbijamy tylko składową normalną (z bounciness = 0.0, to ją po prostu zeruje)
+                            val reflectedNormalVx = -normalVelocityX * bounciness
+                            val reflectedNormalVy = -normalVelocityY * bounciness
+
+                            // Nowa prędkość to stara styczna + odbita (wyzerowana) normalna
+                            velocityX = tangentVelocityX + reflectedNormalVx
+                            velocityY = tangentVelocityY + reflectedNormalVy
+                            // --- KONIEC POPRAWKI ---
+                        }
+
+                    } else {
+                        // *** PRZYPADEK 2: ŚCIANA ZEWNĘTRZNA (ZIELONA - WKLĘSŁA) ***
+                        // (Kulka jest na zewnątrz pierścienia i leci do środka)
+
+                        // 2. Rozwiąż penetrację (Wypchnij kulkę NA ZEWNĄTRZ)
+                        val penetrationDepth = (ring.outerRadius + ballRadius) - distance
+
+                        if (penetrationDepth > 0) {
+                            val correction = (penetrationDepth + 0.01f)
+                            ballX += normalX * correction // <-- ZNAK PLUS
+                            ballY += normalY * correction // <-- ZNAK PLUS
+                        }
+
+                        // 3. Reaguj na prędkość (TYLKO jeśli leci DO ŚRODKA, czyli dot < 0)
+                        if (dot < 0) {
+                            // --- UŻYWAMY LOGIKI "SLIDE", KTÓRA TU DZIAŁA ---
+                            val bounciness = 0.0f // CHCEMY IDEALNY ŚLIZG
+
+                            val normalVelocityX = dot * normalX
+                            val normalVelocityY = dot * normalY
+                            val tangentVelocityX = velocityX - normalVelocityX
+                            val tangentVelocityY = velocityY - normalVelocityY
+
+                            val reflectedNormalVx = -normalVelocityX * bounciness
+                            val reflectedNormalVy = -normalVelocityY * bounciness
+
+                            velocityX = tangentVelocityX + reflectedNormalVx
+                            velocityY = tangentVelocityY + reflectedNormalVy
+                        }
+                    }
+                    // --- KONIEC NOWEJ LOGIKI ---
                 }
                 if (prevState.second && !currentState.second && !isTriggered[index]) {
                     isTriggered[index] = true
