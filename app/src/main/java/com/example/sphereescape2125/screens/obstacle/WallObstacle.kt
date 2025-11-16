@@ -1,14 +1,9 @@
 package com.example.sphereescape2125.screens.obstacle
 
-import android.R
-import android.util.Log
-import androidx.compose.animation.core.repeatable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.PI
-import kotlin.math.floor
 import kotlin.random.Random
 import kotlin.math.cos
 import kotlin.math.sin
