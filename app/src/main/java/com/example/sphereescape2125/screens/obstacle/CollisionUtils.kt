@@ -7,13 +7,6 @@ import kotlin.math.hypot
 import kotlin.math.cos
 import kotlin.math.sin
 
-/**
- * Sprawdza, czy kulka koliduje z pierścieniem i czy znajduje się w dziurze.
- * Zwraca:
- * - Pair(true, false)  → kolizja z pierścieniem
- * - Pair(false, true)  → kula w dziurze
- * - Pair(false, false) → brak kontaktu
- */
 fun isCircleCollidingWithRing(
     circleCenter: Offset,
     circleRadius: Float,
@@ -76,25 +69,11 @@ fun isCircleCollidingWithRing(
     return true to false
 }
 
-/**
- * (NOWA FUNKCJA ZASTĘPUJĄCA isCircleCollidingWithWall)
- * Sprawdza kolizję kuli ze ścianą.
- * Zwraca Parę (najbliższy punkt na linii ściany, dystans do linii ściany)
- * lub null, jeśli nie ma kolizji.
- */
-// W pliku: CollisionUtils.kt
-
-/**
- * (NOWA, STABILNA WERSJA)
- * Sprawdza kolizję kuli ze ścianą.
- * Zwraca (najbliższy punkt na linii ściany, dystans do linii ściany, wektor normalny ściany)
- * lub null, jeśli nie ma kolizji.
- */
 fun getWallCollisionInfo(
     circleCenter: Offset,
     circleRadius: Float,
     wall: WallObstacle
-): Triple<Offset, Float, Offset>? { // Zwraca (najbliższy_punkt, dystans, normalna) lub null
+): Triple<Offset, Float, Offset>? {
     val angleRad = Math.toRadians(wall.angle.toDouble())
 
     val start = Offset(
@@ -109,7 +88,7 @@ fun getWallCollisionInfo(
     // Wektor kierunkowy ściany
     val dx = end.x - start.x
     val dy = end.y - start.y
-    if (dx == 0f && dy == 0f) return null // ściana o zerowej długości
+    if (dx == 0f && dy == 0f) return null
 
     // Znajdź najbliższy punkt na linii
     val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / (dx * dx + dy * dy)
@@ -122,33 +101,24 @@ fun getWallCollisionInfo(
     val collisionThreshold = circleRadius + wallHalfWidth
 
     if (distance <= collisionThreshold) {
-        // --- KLUCZOWA ZMIANA: Obliczanie stabilnej normalnej ---
         // Obliczamy normalną z wektora kierunkowego ściany (dx, dy)
         // Wektor prostopadły to (-dy, dx)
         val normalLen = hypot(dx, dy)
-        if (normalLen == 0f) return null // Niemożliwe, ale zabezpieczenie
+        if (normalLen == 0f) return null
 
         var normalX = -dy / normalLen
         var normalY = dx / normalLen
 
-        // Musimy się upewnić, że normalna jest skierowana "na zewnątrz" ściany,
-        // czyli w kierunku kulki.
+        // Musimy się upewnić, że normalna jest skierowana na zewnątrz ściany,
         // Używamy wektora od środka ściany do kulki.
         val vecToCircleX = circleCenter.x - closest.x
         val vecToCircleY = circleCenter.y - closest.y
 
-        // Iloczyn skalarny pokaże, czy nasza normalna (+normalX) jest w tym samym kierunku co wektor do kulki
         val dot = (normalX * vecToCircleX) + (normalY * vecToCircleY)
 
-        // Jeśli dot < 0, nasza normalna jest "odwrócona"
         if (dot < 0) {
             normalX = -normalX
             normalY = -normalY
-        }
-
-        // Zabezpieczenie przed 'distance = 0'
-        if (vecToCircleX == 0f && vecToCircleY == 0f) {
-            // Kulka idealnie na linii - użyjmy obliczonej normalnej
         }
 
         return Triple(closest, distance, Offset(normalX, normalY)) // Jest kolizja!
