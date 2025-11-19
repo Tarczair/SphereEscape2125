@@ -17,6 +17,23 @@ data class WallObstacle(
     val color: Color
 )
 
+fun anglesFarEnoughPx(
+    newAngle: Float,
+    used: List<Float>,
+    minPx: Float,
+    radius: Float
+): Boolean {
+    val minDeg = (minPx / radius) * (180f / PI.toFloat())
+
+    return used.all { existing ->
+        val diff = kotlin.math.abs(newAngle - existing)
+        val wrap = 360f - diff
+        val smallest = kotlin.math.min(diff, wrap)
+        smallest >= minDeg
+    }
+}
+
+
 fun adjustAngleOutsideGapsSector(
     angle: Float,
     current: RingObstacle,
@@ -62,6 +79,8 @@ fun generateWallsBetweenRings(
         .toList()
 
     for (i in 0 until rings.lastIndex) {
+        val usedAngles = mutableListOf<Float>()
+
         val current = rings[i]
         val next = rings[i + 1]
 
@@ -87,11 +106,11 @@ fun generateWallsBetweenRings(
         current.wallsGenerated = true
 
         repeat(wallsPerGap) { index ->
+
             val minAngle = (sectorSize * index)
             val maxAngle = minAngle + sectorSize
 
             val filteredAngles = validAngles.filter { it in minAngle..maxAngle }
-
             if (filteredAngles.isEmpty()) return@repeat
 
             var baseAngle = filteredAngles.random()
@@ -104,10 +123,18 @@ fun generateWallsBetweenRings(
                 val type = Random.nextInt(4)
 
                 val (startR, endR) = when (type) {
-                    0, 1, -> current.outerRadius + 20 to next.innerRadius + 25 // pełna ściana
-                    2-> current.outerRadius + 20 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 30 // połowa
-                    else -> next.innerRadius + 25  to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10 // połowa
+                    0, 1 -> current.outerRadius + 20 to next.innerRadius + 25
+                    2 -> current.outerRadius + 20 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 30
+                    else -> next.innerRadius + 25 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10
                 }
+
+                // TU DODAJEMY FILTROWANIE PO ODLEGŁOŚCI 100px
+                val avgRadius = (startR + endR) / 2f
+                if (!anglesFarEnoughPx(adjustedAngle, usedAngles, 200f, avgRadius)) {
+                    return@repeat
+                }
+
+                usedAngles.add(adjustedAngle)
 
                 walls.add(
                     WallObstacle(
@@ -121,6 +148,7 @@ fun generateWallsBetweenRings(
                 )
             }
         }
+
     }
 
     return walls
@@ -147,4 +175,3 @@ fun DrawScope.drawWalls(walls: List<WallObstacle>) {
         )
     }
 }
-

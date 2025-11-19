@@ -121,7 +121,7 @@ fun GameCanvas() {
                     center = Offset(600f, 800f),
                     outerRadius = 250f,
                     innerRadius = 200f,
-                    color = obstacleColor
+                    color = obstacleColor,
                 )
             )
             prevStates.add(false to false)
@@ -131,7 +131,7 @@ fun GameCanvas() {
                     center = Offset(600f, 800f),
                     outerRadius = 500f,
                     innerRadius = 450f,
-                    color = obstacleColor
+                    color = obstacleColor,
                 )
             )
             prevStates.add(false to false)
@@ -258,7 +258,7 @@ fun GameCanvas() {
                         center = Offset(600f, 800f),
                         outerRadius = 500f + 250f * ringCount,
                         innerRadius = 450f + 250f * ringCount,
-                        color = obstacleColor
+                        color = obstacleColor,
                     )
                 }
                 if (index < prevStates.size) {
@@ -315,7 +315,6 @@ fun GameCanvas() {
         if (rings.size > 1) {
             val newWalls = generateWallsBetweenRings(
                 rings = rings,
-                existingWalls = walls,
                 wallsPerGap = 6 + (4 * (rings.size - 2)),
                 color = obstacleColor
             )
