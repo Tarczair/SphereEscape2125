@@ -2,15 +2,12 @@ package com.example.sphereescape2125.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-// import androidx.compose.foundation.gestures.detectTapGestures // ZMIANA: Usunięte
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-// import androidx.compose.ui.input.pointer.pointerInput // ZMIANA: Usunięte
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.example.sphereescape2125.screens.obstacle.RingObstacle
@@ -23,7 +20,6 @@ import kotlinx.coroutines.delay
 import android.util.Log
 import kotlin.math.hypot
 
-// --- NOWE IMPORTY ---
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
@@ -34,11 +30,16 @@ import kotlin.math.abs
 @Composable
 fun GameScreen(onBack: () -> Unit) {
     var time by remember { mutableIntStateOf(60) }
+    var hasWon by remember { mutableStateOf(false) }
+    var bestScore by remember { mutableStateOf(200) }
 
-    LaunchedEffect(Unit) {
-        while (time > 0) {
-            delay(1000)
-            time--
+    // Timer działa tylko gdy gra trwa
+    LaunchedEffect(hasWon) {
+        if (!hasWon) {
+            while (time > 0) {
+                delay(1000)
+                time--
+            }
         }
     }
 
@@ -47,39 +48,93 @@ fun GameScreen(onBack: () -> Unit) {
             .background(MaterialTheme.colorScheme.background)
             .fillMaxSize()
     ) {
-        GameCanvas()
+        var highScore by remember { mutableStateOf(0) }
 
+        GameCanvas(
+            hasWon = hasWon,
+            remainingTime = time,
+            onWin = { score ->
+                highScore = score
+                hasWon = true
+            }
+        )
+
+
+        // Jeśli gra NIE jest wygrana → pokazujemy UI gry
+        if (!hasWon) {
+            GameHUD(time = time, onBack = onBack)
+        }
+
+        // Jeśli gra JEST wygrana → pokazujemy ekran zwycięstwa
+        if (hasWon) {
+            VictoryScreen(
+                points = highScore,
+                bestScore = maxOf(highScore, bestScore),
+                onBack = onBack
+            )
+        }
+    }
+}
+
+@Composable
+fun GameHUD(time: Int, onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Bottom
+    ) {
+        Text(
+            "POZIOM I",
+            modifier = Modifier.padding(top = 24.dp),
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em)
+        )
+        Text(
+            "POZOSTAŁY CZAS: ${String.format("%02d:%02d", time / 60, time % 60)}",
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em),
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("WRÓĆ")
+        }
+    }
+}
+
+@Composable
+fun VictoryScreen(points: Int, bestScore: Int, onBack: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f)),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             Text(
-                "POZIOM I",
-                modifier = Modifier.padding(top = 24.dp),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 6.em,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                "ZWYCIĘSTWO!",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "POZOSTAŁY CZAS: ${String.format("%02d:%02d", time / 60, time % 60)}",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 6.em,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                "Zdobyte punkty: $points",
+                style = MaterialTheme.typography.headlineMedium
             )
+            Text(
+                "Najlepszy wynik: $bestScore",
+                style = MaterialTheme.typography.headlineMedium
+            )
+
             Button(
                 onClick = onBack,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp)
             ) {
                 Text("WRÓĆ")
             }
@@ -87,11 +142,19 @@ fun GameScreen(onBack: () -> Unit) {
     }
 }
 
+
 @Composable
-fun GameCanvas() {
+fun GameCanvas(
+    hasWon: Boolean,
+    remainingTime: Int,
+    onWin: (score: Int) -> Unit
+)
+ {
     val isTriggered = remember { mutableStateListOf<Boolean>().apply { repeat(20) { add(false) } } }
     var ringCount by remember { mutableIntStateOf(0) }
     val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
+
+    val maxRings = 15
 
     var ballX by remember { mutableFloatStateOf(600f) }
     var ballY by remember { mutableFloatStateOf(800f) }
@@ -105,6 +168,9 @@ fun GameCanvas() {
 
     val context = LocalContext.current
     val tiltSensor = remember { TiltSensor(context) }
+
+     val ringTimes = remember { mutableStateListOf<Long>() } // czas wejścia w pierścień
+     var localHighScore by remember { mutableIntStateOf(0) }
 
     DisposableEffect(Unit) {
         tiltSensor.startListening()
@@ -151,6 +217,13 @@ fun GameCanvas() {
 
     LaunchedEffect(Unit) {
         while (true) {
+            if (hasWon) {
+                // Zatrzymaj kulkę
+                velocityX = 0f
+                velocityY = 0f
+                delay(16L)
+                continue
+            }
             val ax = -gravityData.x * accelerationFactor
             val ay = (gravityData.y - CALIBRATION_OFFSET_Y) * accelerationFactor
 
@@ -251,9 +324,23 @@ fun GameCanvas() {
                         }
                     }
                 }
+
+
                 if (prevState.second && !currentState.second && !isTriggered[index]) {
                     isTriggered[index] = true
                     ringCount++
+
+                    val currentTime = System.currentTimeMillis()
+                    val timeSpent = if (ringTimes.isEmpty()) 0 else (currentTime - ringTimes.last()) / 1000
+                    ringTimes.add(currentTime)
+
+                    if (timeSpent < 10) localHighScore += (10 - timeSpent).toInt()
+
+                    if (ringCount == maxRings) {
+                        localHighScore += remainingTime * 5
+                        onWin(localHighScore)
+                    }
+
                     ringToAdd = RingObstacle(
                         center = Offset(600f, 800f),
                         outerRadius = 500f + 250f * ringCount,
@@ -261,6 +348,7 @@ fun GameCanvas() {
                         color = obstacleColor,
                     )
                 }
+
                 if (index < prevStates.size) {
                     prevStates[index] = currentState
                 }
@@ -303,8 +391,12 @@ fun GameCanvas() {
 
 
             ringToAdd?.let {
-                rings.add(it)
-                prevStates.add(false to false)
+                if (rings.size < maxRings) {
+                    rings.add(it)
+                    prevStates.add(false to false)
+                } else {
+                    onWin(localHighScore)
+                }
             }
 
             delay(16L)
