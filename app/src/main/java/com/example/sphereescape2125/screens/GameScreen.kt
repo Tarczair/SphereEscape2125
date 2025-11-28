@@ -16,68 +16,69 @@ import com.example.sphereescape2125.screens.obstacle.drawRingWithGaps
 import com.example.sphereescape2125.screens.obstacle.isCircleCollidingWithRing
 import com.example.sphereescape2125.screens.obstacle.drawWalls
 import com.example.sphereescape2125.screens.obstacle.generateWallsBetweenRings
+
+import android.app.Activity
+import android.view.WindowManager
 import kotlinx.coroutines.delay
 import android.util.Log
 import kotlin.math.hypot
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
+import com.example.sphereescape2125.screens.obstacle.EffectType
+import com.example.sphereescape2125.screens.obstacle.GapWithEffect
 import com.example.sphereescape2125.sensors.TiltSensor // Upewnij się, że ścieżka jest poprawna
 import com.example.sphereescape2125.screens.obstacle.getWallCollisionInfo // WAŻNY IMPORT!
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.floor
 
 
 @Composable
-fun GameScreen(onBack: () -> Unit) {
-    var time by remember { mutableIntStateOf(60) }
-    var hasWon by remember { mutableStateOf(false) }
-    var bestScore by remember { mutableStateOf(200) }
+fun AndroidKeepScreenOn() {
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val window = (context as Activity).window
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-    // Timer działa tylko gdy gra trwa
-    LaunchedEffect(hasWon) {
-        if (!hasWon) {
-            while (time > 0) {
-                delay(1000)
-                time--
-            }
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .background(MaterialTheme.colorScheme.background)
-            .fillMaxSize()
-    ) {
-        var highScore by remember { mutableStateOf(0) }
-
-        GameCanvas(
-            hasWon = hasWon,
-            remainingTime = time,
-            onWin = { score ->
-                highScore = score
-                hasWon = true
-            }
-        )
-
-
-        // Jeśli gra NIE jest wygrana → pokazujemy UI gry
-        if (!hasWon) {
-            GameHUD(time = time, onBack = onBack)
-        }
-
-        // Jeśli gra JEST wygrana → pokazujemy ekran zwycięstwa
-        if (hasWon) {
-            VictoryScreen(
-                points = highScore,
-                bestScore = maxOf(highScore, bestScore),
-                onBack = onBack
-            )
+        onDispose {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }
 
 @Composable
-fun GameHUD(time: Int, onBack: () -> Unit) {
+fun GameScreen(onBack: () -> Unit) {
+    AndroidKeepScreenOn()
+    var hasWon by remember { mutableStateOf(false) }
+    var bestScore by remember { mutableStateOf(200) }
+    var timeLeft by remember { mutableStateOf(60) } // <- jeden timer
+
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        GameCanvas(
+            hasWon = hasWon,
+            remainingTime = timeLeft,
+            onTimeChange = { update ->
+                timeLeft = update.coerceAtLeast(0) // <- bez sprawdzania typu, update jest Int
+            },
+            onWin = { score ->
+                bestScore = maxOf(score, bestScore)
+                hasWon = true
+            }
+        )
+        if (!hasWon) {
+            GameHUD(timeLeft = timeLeft, onBack = onBack)
+        }
+        if (hasWon) {
+            VictoryScreen(points = bestScore, bestScore = bestScore, onBack = onBack)
+        }
+    }
+}
+
+
+
+@Composable
+fun GameHUD(timeLeft: Int, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -91,7 +92,7 @@ fun GameHUD(time: Int, onBack: () -> Unit) {
             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em)
         )
         Text(
-            "POZOSTAŁY CZAS: ${String.format("%02d:%02d", time / 60, time % 60)}",
+            "POZOSTAŁY CZAS: ${String.format("%02d:%02d", timeLeft / 60, timeLeft % 60)}",
             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em),
             modifier = Modifier.padding(bottom = 16.dp)
         )
@@ -143,10 +144,13 @@ fun VictoryScreen(points: Int, bestScore: Int, onBack: () -> Unit) {
 }
 
 
+const val gapSize = 120f
+
 @Composable
 fun GameCanvas(
     hasWon: Boolean,
     remainingTime: Int,
+    onTimeChange: (Int) -> Unit,
     onWin: (score: Int) -> Unit
 )
  {
@@ -171,6 +175,17 @@ fun GameCanvas(
 
      val ringTimes = remember { mutableStateListOf<Long>() } // czas wejścia w pierścień
      var localHighScore by remember { mutableIntStateOf(0) }
+     var localTimer by remember { mutableIntStateOf(remainingTime) }
+
+     LaunchedEffect(Unit) {
+         while (true) {
+             if (!hasWon && localTimer > 0) {
+                 delay(1000)
+                 localTimer--
+                 onTimeChange(localTimer)
+             }
+         }
+     }
 
     DisposableEffect(Unit) {
         tiltSensor.startListening()
@@ -207,6 +222,10 @@ fun GameCanvas(
     var velocityX by remember { mutableFloatStateOf(0f) }
     var velocityY by remember { mutableFloatStateOf(0f) }
 
+     var pendingWallModifier by remember { mutableFloatStateOf(0f) }
+     var pendingGapModifier by remember { mutableFloatStateOf(0f) }
+     var pendingTimeModifier by remember { mutableIntStateOf(0) }
+     var pendingPointModifier by remember { mutableFloatStateOf(0f) }
 
 
     val accelerationFactor = 0.5f
@@ -327,7 +346,39 @@ fun GameCanvas(
 
 
                 if (prevState.second && !currentState.second && !isTriggered[index]) {
+                    val angle = Math.toDegrees(
+                        kotlin.math.atan2(
+                            (ballY - ring.center.y).toDouble(),
+                            (ballX - ring.center.x).toDouble()
+                        )
+                    ).let { if (it < 0) it + 360 else it }
+
+                    val effect = ring.gapEffects.minByOrNull { g: GapWithEffect ->
+                        abs(g.midAngle - angle)
+                    }
+
+                    effect?.let { g ->
+                        when (g.effect.type) {
+                            EffectType.WALLS -> pendingWallModifier += g.effect.value
+                            EffectType.GAPS -> pendingGapModifier += g.effect.value
+                            EffectType.TIME -> {
+                                localTimer += g.effect.value.toInt() // dodaje + lub - w zależności od efektu
+                                if (localTimer < 0) localTimer = 0
+                                onTimeChange(localTimer)
+                            }
+
+
+
+                            EffectType.POINTS -> pendingPointModifier += g.effect.value
+                        }
+                        Log.d("EFFECT_tag", "Aktywacja: ${g.effect.label}")
+                    }
+
+                    while (isTriggered.size <= index) {
+                        isTriggered.add(false)
+                    }
                     isTriggered[index] = true
+
                     ringCount++
 
                     val currentTime = System.currentTimeMillis()
@@ -337,21 +388,37 @@ fun GameCanvas(
                     if (timeSpent < 10) localHighScore += (10 - timeSpent).toInt()
 
                     if (ringCount == maxRings) {
-                        localHighScore += remainingTime * 5
+                        localHighScore += localTimer * 5
                         onWin(localHighScore)
                     }
 
-                    ringToAdd = RingObstacle(
+                    val newOuter = 500f + 250f * ringCount
+                    val newInner = 450f + 250f * ringCount
+                    val baseGaps = (floor(((PI.toFloat() * newInner) / gapSize) / 6)).toInt() + 2
+                    val modifiedGaps = (baseGaps + pendingGapModifier).toInt().coerceAtLeast(1)
+
+                    val newRing = RingObstacle(
                         center = Offset(600f, 800f),
-                        outerRadius = 500f + 250f * ringCount,
-                        innerRadius = 450f + 250f * ringCount,
+                        outerRadius = newOuter,
+                        innerRadius = newInner,
                         color = obstacleColor,
-                    )
+                        wallsGenerated = false
+                    ).apply {
+                        totalExits = modifiedGaps
+                    }
+
+                    pendingGapModifier = 0f
+                    localHighScore += pendingPointModifier.toInt()
+                    pendingPointModifier = 0f
+
+                    ringToAdd = newRing
                 }
 
-                if (index < prevStates.size) {
-                    prevStates[index] = currentState
+
+                while (prevStates.size <= index) {
+                    prevStates.add(false to false)
                 }
+                prevStates[index] = currentState
             }
 
             for (wall in walls) {
@@ -405,11 +472,17 @@ fun GameCanvas(
 
     LaunchedEffect(rings.size) {
         if (rings.size > 1) {
+            val baseWalls = 6 + (4 * (rings.size - 2))
+            val modifiedWalls = (baseWalls + pendingWallModifier).toInt().coerceAtLeast(1)
+            pendingWallModifier = 0f
+
+
             val newWalls = generateWallsBetweenRings(
                 rings = rings,
-                wallsPerGap = 6 + (4 * (rings.size - 2)),
+                wallsPerGap = modifiedWalls,
                 color = obstacleColor
             )
+
             walls.addAll(newWalls)
         }
     }
