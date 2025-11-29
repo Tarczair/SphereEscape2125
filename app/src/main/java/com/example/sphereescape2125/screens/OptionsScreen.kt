@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,10 +28,22 @@ fun OptionsScreen(onBack: () -> Unit) {
     var musicVolume by remember { mutableStateOf(0.5f) }
     var soundVolume by remember { mutableStateOf(0.7f) }
 
+    // --- LOGIKA KOLORÓW ---
+    // 1. Sprawdzamy jasność tła
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    // 2. Definiujemy dynamiczne kolory tekstów
+    val mainTextColor = if (isDark) Color.White else Color(0xFF1C1B1F) // Biały vs Ciemny Grafit
+    val secondaryTextColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF1C1B1F).copy(alpha = 0.8f)
+
+    // 3. Kolory slidera
+    val sliderInactiveColor = if (isDark) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.1f)
+    val sliderActiveColor = if (isDark) Color.Cyan else Color(0xFF00897B) // Turkusowy w jasnym
+
     // 1. Box jako główny kontener (warstwy)
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // 2. TŁO: Cząsteczki (tak samo jak w Menu)
+        // 2. TŁO: Cząsteczki
         AnimatedParticleBackground(modifier = Modifier.fillMaxSize())
 
         // 3. TREŚĆ
@@ -41,19 +54,27 @@ fun OptionsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // TYTUŁ
+            // TYTUŁ "OPCJE"
             Text(
                 text = "OPCJE",
-                color = Color.White,
+                color = mainTextColor,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 2.sp,
                 style = MaterialTheme.typography.headlineLarge.copy(
-                    shadow = Shadow(
-                        color = Color.Cyan.copy(alpha = 0.5f),
-                        offset = Offset(0f, 0f),
-                        blurRadius = 20f // Neonowy blask
-                    )
+                    shadow = if (isDark) {
+                        Shadow(
+                            color = Color.Cyan.copy(alpha = 0.5f),
+                            offset = Offset(0f, 0f),
+                            blurRadius = 20f
+                        )
+                    } else {
+                        Shadow(
+                            color = Color.Black.copy(alpha = 0.1f),
+                            offset = Offset(2f, 2f),
+                            blurRadius = 4f
+                        )
+                    }
                 ),
                 modifier = Modifier.padding(bottom = 40.dp)
             )
@@ -61,7 +82,7 @@ fun OptionsScreen(onBack: () -> Unit) {
             // SEKCJA: MUZYKA
             Text(
                 text = "Głośność muzyki: ${(musicVolume * 100).toInt()}%",
-                color = Color.White.copy(alpha = 0.8f),
+                color = secondaryTextColor,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -72,9 +93,9 @@ fun OptionsScreen(onBack: () -> Unit) {
                 value = musicVolume,
                 onValueChange = { musicVolume = it },
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.Cyan,
-                    activeTrackColor = Color.Cyan.copy(alpha = 0.8f),
-                    inactiveTrackColor = Color.White.copy(alpha = 0.2f) // Wygląda jak szkło
+                    thumbColor = sliderActiveColor,
+                    activeTrackColor = sliderActiveColor.copy(alpha = 0.8f),
+                    inactiveTrackColor = sliderInactiveColor
                 )
             )
 
@@ -83,7 +104,7 @@ fun OptionsScreen(onBack: () -> Unit) {
             // SEKCJA: DŹWIĘKI
             Text(
                 text = "Głośność efektów: ${(soundVolume * 100).toInt()}%",
-                color = Color.White.copy(alpha = 0.8f),
+                color = secondaryTextColor,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -92,51 +113,69 @@ fun OptionsScreen(onBack: () -> Unit) {
                 value = soundVolume,
                 onValueChange = { soundVolume = it },
                 colors = SliderDefaults.colors(
-                    thumbColor = Color.Cyan,
-                    activeTrackColor = Color.Cyan.copy(alpha = 0.8f),
-                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                    thumbColor = sliderActiveColor,
+                    activeTrackColor = sliderActiveColor.copy(alpha = 0.8f),
+                    inactiveTrackColor = sliderInactiveColor
                 )
             )
 
             Spacer(Modifier.height(50.dp))
 
-            // PRZYCISK RESET (Szklany, ale Czerwony)
-            // Tworzymy go ręcznie tutaj, bo GlassButton jest domyślnie biały/szary.
-            // To doda fajny efekt niebezpieczeństwa.
+            // --- PRZYCISK RESET (DYNAMICZNY) ---
+            val resetButtonBrush = if (isDark) {
+                // Ciemny motyw: Czerwone, "żarzące się" szkło
+                Brush.horizontalGradient(
+                    colors = listOf(Color(0xFFD32F2F).copy(alpha = 0.3f), Color(0xFFB71C1C).copy(alpha = 0.5f))
+                )
+            } else {
+                // Jasny motyw: Ciemnogranatowe szkło (Navy Blue)
+                // Używamy alpha, żeby zachować efekt szkła, ale kolory są ciemne, żeby kontrastowały z tłem
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF1A237E).copy(alpha = 0.7f), // Ciemny Indygo
+                        Color(0xFF0D47A1).copy(alpha = 0.8f)  // Ciemny Niebieski
+                    )
+                )
+            }
+
+            // Kolor ramki
+            val resetButtonBorder = if (isDark) Color.Red.copy(alpha = 0.5f) else Color(0xFF283593).copy(alpha = 0.5f)
+            // Kolor cienia (poświaty)
+            val resetButtonShadow = if (isDark) Color.Red else Color(0xFF1A237E).copy(alpha = 0.5f)
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .height(50.dp)
-                    .shadow(10.dp, shape = RoundedCornerShape(30.dp), spotColor = Color.Red)
+                    .shadow(8.dp, shape = RoundedCornerShape(30.dp), spotColor = resetButtonShadow)
                     .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(Color(0xFFD32F2F).copy(alpha = 0.3f), Color(0xFFB71C1C).copy(alpha = 0.5f))
-                        ),
+                        brush = resetButtonBrush,
                         shape = RoundedCornerShape(30.dp)
                     )
-                    .border(1.dp, Color.Red.copy(alpha = 0.5f), RoundedCornerShape(30.dp))
-                // Tutaj można dodać clickable { } z logiką resetu
+                    .border(1.dp, resetButtonBorder, RoundedCornerShape(30.dp))
             ) {
                 Text(
                     text = "RESETUJ POSTĘP",
-                    color = Color.White,
+                    color = Color.White, // Biały tekst wygląda świetnie i na czerwonym, i na granatowym
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
             }
 
+            // Tekst ostrzegawczy pod przyciskiem
             Text(
                 text = "Tej operacji nie można cofnąć.",
-                color = Color.Red.copy(alpha = 0.8f),
+                // W ciemnym motywie czerwony, w jasnym granatowy (dopasowany do przycisku)
+                color = if (isDark) Color.Red.copy(alpha = 0.8f) else Color(0xFF1A237E).copy(alpha = 0.8f),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp)
             )
 
             Spacer(Modifier.height(40.dp))
 
-            // PRZYCISK POWROTU (Nasz standardowy GlassButton)
+            // PRZYCISK POWROTU
             GlassButton(
                 text = "WRÓĆ",
                 onClick = onBack
