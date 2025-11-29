@@ -8,9 +8,11 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import kotlin.random.Random
 
 // W pliku MainMenu.kt (lub osobno, jeśli chcesz to reutilizować)
@@ -38,8 +40,8 @@ data class Particle(
 @Composable
 fun AnimatedParticleBackground(
     modifier: Modifier = Modifier,
-    // To automatycznie wykryje ustawienie z Twojego czujnika światła!
-    isDark: Boolean = isSystemInDarkTheme()
+
+    isDark: Boolean = MaterialTheme.colorScheme.background.luminance() < 0.5f
 ) {
     val particles = remember { mutableStateListOf<Particle>() }
 
