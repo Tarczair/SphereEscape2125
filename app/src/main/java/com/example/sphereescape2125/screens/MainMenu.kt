@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -27,13 +28,27 @@ fun MainMenu(
 ) {
     val activity = LocalContext.current as? ComponentActivity
 
+
+    // --- LOGIKA KOLORÓW DLA TYTUŁU ---
+    // Sprawdzamy jasność tła (z motywu sterowanego czujnikiem)
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+    // Wybieramy kolor tytułu:
+    // Ciemny -> Cyan (jak było)
+    // Jasny -> 0xFFFF1744 (ta sama czerwień co w kulce)
+    val titleColor = if (isDark) {
+        Color.Cyan.copy(alpha = 0.8f)
+    } else {
+        Color(0xFFFF1744).copy(alpha = 0.9f) // Lekko większe alpha dla czerwonego, żeby był wyraźny
+    }
+
     // Główny kontener (Box pozwala nakładać elementy na siebie - tło pod spodem)
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         // 1. WARSTWA TŁA: Cząsteczki (z pliku Particles.kt)
-        // Upewnij się, że Particles.kt jest w pakiecie ui.theme
+
         AnimatedParticleBackground(modifier = Modifier.fillMaxSize())
 
         // 2. WARSTWA TREŚCI: Napisy i przyciski
@@ -45,7 +60,7 @@ fun MainMenu(
             // TYTUŁ GRY
             Text(
                 text = "SPHERE ESCAPE",
-                color = Color.Cyan.copy(alpha = 0.8f), // Lekki neonowy błękit
+                color = titleColor,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 2.sp,
@@ -68,7 +83,7 @@ fun MainMenu(
 
             Spacer(modifier = Modifier.height(60.dp))
 
-            // LISTA PRZYCISKÓW (te prostokątne)
+            // LISTA PRZYCISKÓW
             GlassButton(text = "Statystyki", onClick = onStats)
             Spacer(modifier = Modifier.height(16.dp))
 
