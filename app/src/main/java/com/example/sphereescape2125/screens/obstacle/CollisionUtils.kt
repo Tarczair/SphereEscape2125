@@ -1,71 +1,65 @@
 package com.example.sphereescape2125.screens.obstacle
 
-
 import androidx.compose.ui.geometry.Offset
+import com.example.sphereescape2125.screens.WallObstacle
 import kotlin.math.PI
-import kotlin.math.hypot
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
+import kotlin.math.abs
+
+// Ten parametr musi być taki sam jak w Obstacle.kt
+const val gapSizeCollision = 120f
 
 fun isCircleCollidingWithRing(
     circleCenter: Offset,
     circleRadius: Float,
-    ring: RingObstacle,
+    ring: RingObstacle
 ): Pair<Boolean, Boolean> {
 
-    val distance = hypot(
-        circleCenter.x - ring.center.x,
-        circleCenter.y - ring.center.y
-    )
-    val gapSize = 120f
+    val distance = hypot(circleCenter.x - ring.center.x, circleCenter.y - ring.center.y)
 
-    // kula zbyt daleko lub zbyt blisko (poza pierścieniem)
-    if (distance + circleRadius < ring.innerRadius + 20 || distance - circleRadius > ring.outerRadius + 20) {
+    // Definiujemy strefę "niebezpieczną" (materiał pierścienia)
+    // Kolizja jest wtedy, gdy kulka wchodzi w zakres [innerRadius, outerRadius]
+    // Margines to promień kulki
+    val collisionStart = ring.innerRadius - circleRadius
+    val collisionEnd = ring.outerRadius + circleRadius
+
+    // Jeśli jesteśmy w bezpiecznym środku (distance < collisionStart)
+    // lub bezpiecznie na zewnątrz (distance > collisionEnd), to BRAK KOLIZJI.
+    if (distance < collisionStart || distance > collisionEnd) {
         return false to false
     }
 
-    // obliczamy kąt położenia kuli
+    // Jeśli tutaj jesteśmy, to znaczy, że fizycznie dotykamy pierścienia.
+    // Teraz sprawdzamy, czy trafiliśmy w przerwę (GAP).
+
     val angle = Math.toDegrees(
-        kotlin.math.atan2(
+        atan2(
             (circleCenter.y - ring.center.y).toDouble(),
             (circleCenter.x - ring.center.x).toDouble()
         )
     ).let { if (it < 0) it + 360 else it }
 
-    // sprawdzamy, czy kula jest w jednej z dziur (gapów)
-    for (gap in ring.gaps) {
-        val gapStart = gap
-        val gapEnd = gapStart + ((gapSize / ring.innerRadius) * (180f / PI.toFloat()) % 360f)
+    for (gapStart in ring.gaps) {
+        val gapAngle = (gapSizeCollision / ring.innerRadius) * (180f / PI.toFloat())
+        val gapEnd = (gapStart + gapAngle) % 360f
 
-        // obsługa przypadku, gdy dziura przekracza 360°
-        val inGap = if (gapEnd > 360f) {
-            angle >= gapStart || angle <= (gapEnd - 360f)
+        val inGap = if (gapEnd < gapStart) {
+            angle >= gapStart || angle <= gapEnd
         } else {
             angle in gapStart..gapEnd
         }
 
-        val startRad = Math.toRadians(gapStart.toDouble())
-        val startX = ring.center.x + ring.outerRadius * cos(startRad)
-        val startY = ring.center.y + ring.outerRadius * sin(startRad)
-        val distStart = hypot(circleCenter.x - startX, circleCenter.y - startY)
-
-        val endRad = Math.toRadians(gapEnd.toDouble())
-        val endX = ring.center.x + ring.outerRadius * cos(endRad)
-        val endY = ring.center.y + ring.outerRadius * sin(endRad)
-        val distEnd = hypot(circleCenter.x - endX, circleCenter.y - endY)
-
-        if (distance + circleRadius > ring.innerRadius + 20 && distance - circleRadius < ring.outerRadius + 20) {
-            if (distEnd <= circleRadius || distStart <= circleRadius) {
-                return true to false
-            }
-        }
-
         if (inGap) {
-            return false to true // kula jest w dziurze
+            // Jesteśmy w materiale pierścienia, ALE trafiliśmy w dziurę -> Bezpiecznie
+            // Zwracamy: colliding=false, insideGap=true
+            return false to true
         }
     }
 
-    // jeśli nie w dziurze, to znaczy że dotyka pierścienia
+    // Dotykamy pierścienia i nie jesteśmy w dziurze -> KOLIZJA
     return true to false
 }
 
@@ -85,44 +79,39 @@ fun getWallCollisionInfo(
         y = wall.endRing.center.y + wall.endRadius * sin(angleRad).toFloat()
     )
 
-    // Wektor kierunkowy ściany
     val dx = end.x - start.x
     val dy = end.y - start.y
     if (dx == 0f && dy == 0f) return null
 
-    // Znajdź najbliższy punkt na linii
-    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / (dx * dx + dy * dy)
+    val lenSq = dx * dx + dy * dy
+    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / lenSq
     val clampedT = t.coerceIn(0f, 1f)
     val closest = Offset(start.x + clampedT * dx, start.y + clampedT * dy)
 
-    // Dystans do najbliższego punktu
     val distance = hypot(circleCenter.x - closest.x, circleCenter.y - closest.y)
+
+    // StrokeWidth ściany to 50f, więc połowa to 25f
     val wallHalfWidth = 25f
     val collisionThreshold = circleRadius + wallHalfWidth
 
     if (distance <= collisionThreshold) {
-        // Obliczamy normalną z wektora kierunkowego ściany (dx, dy)
-        // Wektor prostopadły to (-dy, dx)
         val normalLen = hypot(dx, dy)
         if (normalLen == 0f) return null
 
         var normalX = -dy / normalLen
         var normalY = dx / normalLen
 
-        // Musimy się upewnić, że normalna jest skierowana na zewnątrz ściany,
-        // Używamy wektora od środka ściany do kulki.
-        val vecToCircleX = circleCenter.x - closest.x
-        val vecToCircleY = circleCenter.y - closest.y
-
-        val dot = (normalX * vecToCircleX) + (normalY * vecToCircleY)
-
-        if (dot < 0) {
+        // Upewnij się, że normal wskazuje w stronę kulki
+        val toCircleX = circleCenter.x - closest.x
+        val toCircleY = circleCenter.y - closest.y
+        val dotToCircle = normalX * toCircleX + normalY * toCircleY
+        if (dotToCircle < 0f) {
             normalX = -normalX
             normalY = -normalY
         }
 
-        return Triple(closest, distance, Offset(normalX, normalY)) // Jest kolizja!
+        return Triple(closest, distance, Offset(normalX, normalY))
     }
 
-    return null // Nie ma kolizji
+    return null
 }
