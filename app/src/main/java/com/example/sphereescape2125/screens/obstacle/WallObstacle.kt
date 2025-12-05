@@ -65,7 +65,6 @@ fun adjustAngleOutsideGapsSector(
 
 fun generateWallsBetweenRings(
     rings: List<RingObstacle>,
-    existingWalls: List<WallObstacle> = emptyList(),
     wallsPerGap: Int = 0,
     color: Color = Color.Red
 ): List<WallObstacle> {
@@ -123,9 +122,9 @@ fun generateWallsBetweenRings(
                 val type = Random.nextInt(4)
 
                 val (startR, endR) = when (type) {
-                    0, 1 -> current.outerRadius + 20 to next.innerRadius + 25
-                    2 -> current.outerRadius + 20 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 30
-                    else -> next.innerRadius + 25 to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10
+                    0, 1 -> current.outerRadius - 5f to next.innerRadius + 5f
+                    2 -> current.outerRadius to (current.outerRadius + (next.innerRadius - current.outerRadius) / 3f) + 10
+                    else -> next.innerRadius + 5f to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10f
                 }
 
                 // TU DODAJEMY FILTROWANIE PO ODLEGŁOŚCI 100px
