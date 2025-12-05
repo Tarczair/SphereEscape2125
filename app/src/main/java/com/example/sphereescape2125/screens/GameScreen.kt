@@ -19,16 +19,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.hypot
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
-import com.example.sphereescape2125.screens.obstacle.EffectType
 import com.example.sphereescape2125.sensors.TiltSensor
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlin.math.min
 
 @Composable
 fun GameOverScreen(onBack: () -> Unit) {
@@ -49,35 +46,13 @@ fun GameOverScreen(onBack: () -> Unit) {
     }
 }
 
-
 @Composable
 fun AndroidKeepScreenOn() {
     val context = LocalContext.current
     DisposableEffect(Unit) {
         val window = (context as Activity).window
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
-}
-
-@Composable
-fun GameOverScreen(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("KONIEC GRY", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-        Text("Skończył sie czas!", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("WRÓĆ DO MENU")
-        }
+        onDispose { window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 }
 
@@ -141,7 +116,6 @@ fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
         }
         Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("WRÓĆ") }
     }
-
 }
 
 @Composable
@@ -235,7 +209,6 @@ fun GameCanvas(
 
     // TIMER
     LaunchedEffect(Unit) {
-        var lastUpdateTime = System.currentTimeMillis() // Dodanie śledzenia czasu
         while (true) {
             // Timer działa tylko jeśli gra trwa
             if (!hasWon && !hasLost && localTimer > 0) {
@@ -298,7 +271,6 @@ fun GameCanvas(
                     velocityX = (velocityX / speed) * maxSpeed
                     velocityY = (velocityY / speed) * maxSpeed
                 }
-            }
 
                 ballX += velocityX * dt * 60
                 ballY += velocityY * dt * 60
@@ -314,8 +286,6 @@ fun GameCanvas(
                         curFirst[i] = coll.first
                         curSecond[i] = coll.second
                     }
-                }
-            }
 
                     var hitGap = false
 

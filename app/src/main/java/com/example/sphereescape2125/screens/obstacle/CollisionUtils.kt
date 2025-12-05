@@ -8,7 +8,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.math.abs
-import com.example.sphereescape2125.screens.obstacle.WallObstacle // Import WallObstacle
+
 
 // Ten parametr musi być taki sam jak w Obstacle.kt
 const val gapSizeCollision = 120f
@@ -21,13 +21,6 @@ fun isCircleCollidingWithRing(
 
     val distance = hypot(circleCenter.x - ring.center.x, circleCenter.y - ring.center.y)
 
-    // Definiujemy strefę "niebezpieczną" (materiał pierścienia)
-    // Kolizja jest wtedy, gdy kulka wchodzi w zakres [innerRadius, outerRadius]
-    // Margines to promień kulki
-    val collisionStart = ring.innerRadius - circleRadius
-    val collisionEnd = ring.outerRadius + circleRadius
-
-    // Sprawdzenie fizycznej kolizji z pierścieniem (z uwzględnieniem promienia kulki)
     val collisionStart = ring.innerRadius - circleRadius
     val collisionEnd = ring.outerRadius + circleRadius
 
@@ -35,8 +28,6 @@ fun isCircleCollidingWithRing(
         return false to false
     }
 
-    // Jeśli tutaj jesteśmy, to znaczy, że fizycznie dotykamy pierścienia.
-    // Teraz sprawdzamy, czy trafiliśmy w przerwę (GAP).
 
     val angle = Math.toDegrees(
         atan2(
