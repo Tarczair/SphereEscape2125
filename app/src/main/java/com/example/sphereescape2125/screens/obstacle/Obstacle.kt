@@ -15,6 +15,13 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.math.min
 
+// NOWA KLASA DLA ŚCIANEK PRZERW
+data class GapWall(
+    val start: Offset,
+    val end: Offset,
+    val normal: Offset
+)
+
 enum class EffectType {
     WALLS,      // liczba ścian
     GAPS,       // liczba przerw
@@ -27,11 +34,11 @@ enum class Operation { ADD, SUB, MULTIPLY, DIVIDE }
 // Funkcja generująca losowy efekt, skalowany względem aktualnego numeru pierścienia
 fun generateRandomEffect(ringCount: Int): RingEffect {
     val effectType = EffectType.entries.random()
-    val isMultiplier = Random.nextFloat() < 0.2f // 20% szansy na mnożenie/dzielenie
+    // 20% szansy na mnożenie/dzielenie dla WALLS, GAPS, POINTS
+    val isMultiplier = Random.nextFloat() < 0.2f && effectType != EffectType.TIME
     val isDebuff = Random.nextFloat() < 0.7f     // 70% debuff / 30% buff
 
     // DYNAMICZNE SKALOWANIE: Wartość max Add/Sub rośnie pierwiastkowo z ringCount
-    // Bazowa wartość: 3. Maksymalna wartość wzrasta o pierwiastek z ringCount (ograniczone do +5).
     val maxAddSub = 3 + (sqrt(ringCount.toFloat())).toInt().coerceAtMost(5)
 
     val value = when (effectType) {
@@ -52,7 +59,7 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
 
     val op = when (effectType) {
         EffectType.WALLS -> {
-            // WALLS: ADD/MUL to DEBUFF (więcej ścian), SUB/DIV to BUFF (mniej ścian)
+            // WALLS: ADD/MUL to DEBUFF, SUB/DIV to BUFF
             if (isMultiplier) {
                 if (isDebuff) Operation.MULTIPLY else Operation.DIVIDE
             } else {
@@ -60,7 +67,7 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
             }
         }
         EffectType.GAPS -> {
-            // GAPS: SUB/DIV to DEBUFF (mniej przerw), ADD/MUL to BUFF (więcej przerw)
+            // GAPS: SUB/DIV to DEBUFF, ADD/MUL to BUFF
             if (isMultiplier) {
                 if (isDebuff) Operation.DIVIDE else Operation.MULTIPLY
             } else {
@@ -122,13 +129,14 @@ data class GapWithEffect(
         get() = (startAngle + endAngle) / 2f
 }
 
+
 data class RingObstacle(
     val center: Offset,
     val outerRadius: Float,
     val innerRadius: Float,
     val color: Color = Color.Red,
     var wallsGenerated: Boolean = false,
-    val ringCount: Int
+    val ringCount: Int // ZMIANA: Dodany ringCount do skalowania
 ) {
     var totalExits: Int = 0
     var gaps: MutableList<Float> = mutableListOf()
@@ -153,14 +161,17 @@ data class RingObstacle(
             val gapStart = randomAngle
             val gapEnd = (gapStart + gapAngle) % 360f
 
+            // ZMIANA: Użycie skalowanej funkcji
             val effect = generateRandomEffect(ringCount)
 
+            // ZMIANA: Poprawka - usuń duplikat z poprzedniej wersji
             gapEffects.add(GapWithEffect(startAngle = gapStart, endAngle = gapEnd, effect = effect))
             gaps.add(gapStart)
         }
     }
 }
 
+// ZMIANA: Funkcja do generowania bocznych ścian przerw
 fun RingObstacle.generateGapWalls(): List<GapWall> {
     val walls = mutableListOf<GapWall>()
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
@@ -168,7 +179,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
     for (gapStart in gaps) {
         val gapEnd = (gapStart + gapAngle) % 360f
 
-        // --- ŚCIANA 1: Na początku przerwy (zamyka materiał pierścienia) ---
+        // --- ŚCIANA 1: Na początku przerwy ---
         val startRad = Math.toRadians(gapStart.toDouble())
         val innerStart = Offset(
             center.x + innerRadius * cos(startRad).toFloat(),
@@ -182,7 +193,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
         val dx1 = outerStart.x - innerStart.x
         val dy1 = outerStart.y - innerStart.y
         val len1 = kotlin.math.hypot(dx1, dy1)
-        val normal1 = if (len1 != 0f) Offset(-dy1/len1, dx1/len1) else Offset.Zero
+        val normal1 = if (len1 != 0f) Offset(-dy1/len1, dx1/len1) else Offset.Zero // Normalna wpycha w pierścień
 
         walls.add(GapWall(innerStart, outerStart, normal1))
 
@@ -201,7 +212,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
         val dx2 = outerEnd.x - innerEnd.x
         val dy2 = outerEnd.y - innerEnd.y
         val len2 = kotlin.math.hypot(dx2, dy2)
-        val normal2 = if (len2 != 0f) Offset(dy2/len2, -dx2/len2) else Offset.Zero
+        val normal2 = if (len2 != 0f) Offset(dy2/len2, -dx2/len2) else Offset.Zero // Normalna wpycha w pierścień
 
         walls.add(GapWall(innerEnd, outerEnd, normal2))
     }
@@ -210,7 +221,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
 }
 
 fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
-    val visualOffset = 20f // Wartość przesunięcia
+    val visualOffset = 20f // ZMIANA: Dodano offset wizualny dla pierścienia
     val visualOuterRadius = obstacle.outerRadius - visualOffset
     val visualInnerRadius = obstacle.innerRadius - visualOffset
     val strokeWidth = visualOuterRadius - visualInnerRadius
@@ -252,7 +263,6 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
             style = Stroke(width = strokeWidth)
         )
     }
-
 
     // WIZUALNA KOREKTA PRZESUNIĘCIA TEKSTU
     for (g in obstacle.gapEffects) {

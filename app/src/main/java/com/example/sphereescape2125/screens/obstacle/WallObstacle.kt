@@ -116,9 +116,9 @@ fun generateWallsBetweenRings(
             if (filteredAngles.isNotEmpty()) {
                 val type = Random.nextInt(4)
                 val (startR, endR) = when (type) {
-                    0, 1 -> current.outerRadius - 5f to next.innerRadius
-                    2 -> current.outerRadius - 5f to (current.outerRadius + (next.innerRadius - current.outerRadius) / 3f)
-                    else -> next.innerRadius to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f)
+                    0, 1 -> current.outerRadius - 5f to next.innerRadius + 5f
+                    2 -> current.outerRadius to (current.outerRadius + (next.innerRadius - current.outerRadius) / 3f) + 10
+                    else -> next.innerRadius + 5f to (current.outerRadius + (next.innerRadius - current.outerRadius) / 1.5f) - 10f
                 }
 
                 val avgRadius = (startR + endR) / 2f

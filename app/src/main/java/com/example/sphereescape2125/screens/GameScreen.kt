@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -14,17 +15,40 @@ import com.example.sphereescape2125.screens.obstacle.*
 import android.app.Activity
 import android.view.WindowManager
 import kotlinx.coroutines.delay
-import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.hypot
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import com.example.sphereescape2125.screens.obstacle.EffectType
 import com.example.sphereescape2125.sensors.TiltSensor
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlin.math.min
+
+@Composable
+fun GameOverScreen(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("KONIEC GRY", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.error)
+        Text("Skończył się czas / Wpadłeś w Czarną Dziurę!", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
+
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text("WRÓĆ DO MENU")
+        }
+    }
+}
+
 
 @Composable
 fun AndroidKeepScreenOn() {
@@ -63,48 +87,34 @@ fun GameScreen(onBack: () -> Unit) {
     var bestScore by rememberSaveable { mutableStateOf(0) }
     var currentScore by remember { mutableStateOf(0) }
     var hasWon by remember { mutableStateOf(false) }
-    var hasLost by remember { mutableStateOf(false) } // NOWY STAN
+    var hasLost by remember { mutableStateOf(false) }
     var timeLeft by remember { mutableStateOf(60) }
 
     LaunchedEffect(Unit) {
-        if (bestScore == 0) {
-            bestScore = 200
-        }
+        if (bestScore == 0) bestScore = 200
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         GameCanvas(
             hasWon = hasWon,
-            hasLost = hasLost, // PRZEKAZANIE NOWEGO STANU
+            hasLost = hasLost,
             remainingTime = timeLeft,
             onTimeChange = { update ->
                 timeLeft = update.coerceAtLeast(0)
-                if (timeLeft == 0 && !hasWon) { // SPRAWDZANIE CZY CZAS SIE SKONCZYL
-                    hasLost = true
-                }
+                if (timeLeft == 0 && !hasWon) hasLost = true
             },
-            onScoreChange = { newScore -> currentScore = newScore },
+            onScoreChange = { currentScore = it },
             onWin = { finalScore ->
                 currentScore = finalScore
-                bestScore = maxOf(finalScore, bestScore)
+                bestScore = maxOf(bestScore, finalScore)
                 hasWon = true
-            }
+            },
+            onLost = { hasLost = true }
         )
 
-        // Zmień warunek wyświetlania HUD
-        if (!hasWon && !hasLost) {
-            GameHUD(timeLeft = timeLeft, currentScore = currentScore, onBack = onBack)
-        }
-
-        // Dodaj ekran przegranej
-        if (hasLost) {
-            GameOverScreen(onBack = onBack)
-        }
-
-        // Ekran wygranej zostaje
-        if (hasWon) {
-            VictoryScreen(points = currentScore, bestScore = bestScore, onBack = onBack)
-        }
+        if (!hasWon && !hasLost) GameHUD(timeLeft, currentScore, onBack)
+        if (hasLost) GameOverScreen(onBack)
+        if (hasWon) VictoryScreen(currentScore, bestScore, onBack)
     }
 }
 
@@ -115,36 +125,21 @@ fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
             .fillMaxSize()
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom    // <-- kluczowe
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-
-        // Teksty nad przyciskiem
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                "POZIOM I",
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em)
-            )
-
-            Text(
-                "WYNIK: $currentScore",
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em),
-                modifier = Modifier.padding(top = 8.dp)
-            )
-
+            Text("POZIOM I", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em))
+            Text("WYNIK: $currentScore", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em), modifier = Modifier.padding(top = 8.dp))
             Text(
                 "POZOSTAŁY CZAS: ${String.format("%02d:%02d", timeLeft / 60, timeLeft % 60)}",
                 style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em),
                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
             )
         }
-
-        // Przycisk na samym dole
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text("WRÓĆ")
-        }
+        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("WRÓĆ") }
     }
 
 }
@@ -157,42 +152,18 @@ fun VictoryScreen(points: Int, bestScore: Int, onBack: () -> Unit) {
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f)),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Text("ZWYCIĘSTWO!", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
             Text("Zdobyte punkty: $points", style = MaterialTheme.typography.headlineMedium)
             Text("Najlepszy wynik: $bestScore", style = MaterialTheme.typography.headlineMedium)
-            Button(onClick = onBack, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp)) {
-                Text("WRÓĆ")
-            }
+            Button(onClick = onBack, modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp)) { Text("WRÓĆ") }
         }
     }
 }
 
-fun getLineSegmentCollision(
-    circleCenter: Offset,
-    circleRadius: Float,
-    start: Offset,
-    end: Offset,
-    normal: Offset
-): Triple<Offset, Float, Offset>? {
-    val dx = end.x - start.x
-    val dy = end.y - start.y
-    val lenSq = dx*dx + dy*dy
-    if (lenSq == 0f) return null
-
-    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / lenSq
-    val clampedT = t.coerceIn(0f, 1f)
-    val closest = Offset(start.x + clampedT * dx, start.y + clampedT * dy)
-    val dist = hypot(circleCenter.x - closest.x, circleCenter.y - closest.y)
-
-    if (dist <= circleRadius) {
-        return Triple(closest, dist, normal)
-    }
-    return null
-}
+// ————————————————————————————————————————————————
+//                         GAME CANVAS
+// ————————————————————————————————————————————————
 
 @Composable
 fun GameCanvas(
@@ -201,39 +172,76 @@ fun GameCanvas(
     remainingTime: Int,
     onTimeChange: (Int) -> Unit,
     onScoreChange: (Int) -> Unit,
-    onWin: (score: Int) -> Unit
+    onWin: (Int) -> Unit,
+    onLost: () -> Unit
 ) {
-    val isTriggered = remember { mutableStateListOf<Boolean>().apply { repeat(20) { add(false) } } }
-    var ringCount by remember { mutableIntStateOf(0) }
-    val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
-
     val maxRings = 15
-    var ballX by remember { mutableFloatStateOf(600f) }
-    var ballY by remember { mutableFloatStateOf(800f) }
-    val ballRadius = 40f
+    var stopLoop = false
 
+    // Inicjalizujemy listy jako puste, ale wypełnimy je w LaunchedEffect
     val rings = remember { mutableStateListOf<RingObstacle>() }
     val walls = remember { mutableStateListOf<WallObstacle>() }
+    val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
+    val isTriggered = remember { mutableStateListOf<Boolean>().apply { repeat(50) { add(false) } } }
 
     val obstacleColor = MaterialTheme.colorScheme.error
     val ballColor = MaterialTheme.colorScheme.secondary
 
-    val context = LocalContext.current
-    val tiltSensor = remember { TiltSensor(context) }
-    val ringTimes = remember { mutableStateListOf<Long>() }
-    var localHighScore by remember { mutableIntStateOf(0) }
+    // STARTING POSITION
+    var ballX by remember { mutableFloatStateOf(600f) }
+    var ballY by remember { mutableFloatStateOf(800f) }
+    val ballRadius = 40f
+
+    var velocityX by remember { mutableFloatStateOf(0f) }
+    var velocityY by remember { mutableFloatStateOf(0f) }
+
+    val accelerationFactor = 0.5f
+    val friction = 0.96f
+    val maxSpeed = 15f
+    val CALIBRATION_OFFSET_Y = 4f
+
+    var ringCount by remember { mutableIntStateOf(0) }
     var localTimer by remember { mutableIntStateOf(remainingTime) }
-    val gapWalls = remember { mutableStateListOf<GapWall>() }
+    var localHighScore by remember { mutableIntStateOf(0) }
     var timeSinceLastRing by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
+    var wallCountModifier by remember { mutableIntStateOf(0) }
+    var gapCountModifier by remember { mutableIntStateOf(0) }
+    var pendingPointModifier by remember { mutableFloatStateOf(0f) }
+
+    // ————— CZARNA DZIURA ————— //
+    val BLACK_HOLE_CENTER = Offset(600f, 800f)
+    val INITIAL_RADIUS = 40f
+    val GROWTH_RATE = 15f // Zmniejszyłem trochę tempo wzrostu dla lepszego balansu
+    val START_DELAY = 5f
+
+    var bhRadius by remember { mutableFloatStateOf(INITIAL_RADIUS) }
+    var bhDelay by remember { mutableFloatStateOf(START_DELAY) }
+    var bhPause by remember { mutableFloatStateOf(0f) }
+
+    val context = LocalContext.current
+    // Pamiętaj, aby klasa TiltSensor istniała w odpowiednim pakiecie
+    val tiltSensor = remember { TiltSensor(context) }
+
+    //Inicjalizacja początkowych pierścieni
     LaunchedEffect(Unit) {
+        if (rings.isEmpty()) {
+            rings.add(RingObstacle(Offset(600f, 800f), 250f, 200f, obstacleColor, ringCount = 0))
+            prevStates.add(false to false)
+            rings.add(RingObstacle(Offset(600f, 800f), 500f, 450f, obstacleColor, ringCount = 1))
+            prevStates.add(false to false)
+        }
+    }
+
+    // TIMER
+    LaunchedEffect(Unit) {
+        var lastUpdateTime = System.currentTimeMillis() // Dodanie śledzenia czasu
         while (true) {
-            if (!hasWon && localTimer > 0) {
+            // Timer działa tylko jeśli gra trwa
+            if (!hasWon && !hasLost && localTimer > 0) {
                 delay(1000)
                 localTimer--
-                onTimeChange(localTimer)
-            } else {
-                delay(1000)
+                withContext(Dispatchers.Main) { onTimeChange(localTimer) }
             }
         }
     }
@@ -244,269 +252,291 @@ fun GameCanvas(
     }
     val gravityData by tiltSensor.gravityData.collectAsState()
 
+    // ———————— GAME LOOP (OPTYMALIZOWANY) ———————— //
     LaunchedEffect(Unit) {
-        if (rings.isEmpty()) {
-            // POPRAWKA 2: Poprawne przekazanie ringCount
-            rings.add(RingObstacle(Offset(600f, 800f), 250f, 200f, obstacleColor, ringCount = 0))
-            prevStates.add(false to false)
-            rings.add(RingObstacle(Offset(600f, 800f), 500f, 450f, obstacleColor, ringCount = 1))
-            prevStates.add(false to false)
-        }
-    }
+        var lastTime = System.currentTimeMillis()
 
-    var velocityX by remember { mutableFloatStateOf(0f) }
-    var velocityY by remember { mutableFloatStateOf(0f) }
+        loop@ while (!stopLoop) {
+            val now = System.currentTimeMillis()
+            val dt = (now - lastTime) / 1000f
+            lastTime = now
 
-    var wallCountModifier by remember { mutableFloatStateOf(0f) }
-    var gapCountModifier by remember { mutableFloatStateOf(0f) }
-    var pendingPointModifier by remember { mutableFloatStateOf(0f) }
+            // Jeżeli gra zakończona, przerywamy pętlę - to pozwala UI natychmiast się przebudować
+            if (hasWon || hasLost) break@loop
 
-    val accelerationFactor = 0.5f
-    val friction = 0.96f
-    val maxSpeed = 15f
-    val CALIBRATION_OFFSET_Y = 4f
+            // Lokalna kopia gravityData (bez odwołań z Compose) — bezpiecznie do pracy w tle
+            val gravity = gravityData
 
-    LaunchedEffect(Unit) {
-        var lastUpdateTime = System.currentTimeMillis() // Dodanie śledzenia czasu
-        while (true) {
-            val currentTime = System.currentTimeMillis()
-
-            if (hasWon || hasLost) {
-                velocityX = 0f
-                velocityY = 0f
-                delay(16L)
-                lastUpdateTime = currentTime // Aktualizacja czasu
-                continue
-            }
-
-            val delta = (currentTime - lastUpdateTime).toFloat() / 1000f // Obliczenie delty
-
-            val ax = -gravityData.x * accelerationFactor
-            val ay = (gravityData.y - CALIBRATION_OFFSET_Y) * accelerationFactor
-
-            velocityX += ax
-            velocityY += ay
-            velocityX *= friction
-            velocityY *= friction
-
-            val speed = hypot(velocityX, velocityY)
-            if (speed > maxSpeed) {
-                velocityX = (velocityX / speed) * maxSpeed
-                velocityY = (velocityY / speed) * maxSpeed
-            }
-
-            // POPRAWKA 1: Użycie delty w aktualizacji pozycji
-            ballX += velocityX * delta * 60
-            ballY += velocityY * delta * 60
-
-            var ringToAdd: RingObstacle? = null
-
-            // ... (reszta logiki GameCanvas jest poprawna i pozostaje bez zmian) ...
-            // UWAGA: Logika efektów jest już poprawna w Twoim wklejonym kodzie.
-
-            // 1. Obliczanie stanów
-            val currentStates = mutableListOf<Pair<Boolean, Boolean>>()
-            rings.forEach { r ->
-                currentStates.add(isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, r))
-            }
-
-            // 2. GapWalls
-            gapWalls.clear()
-            rings.forEach { ring -> gapWalls.addAll(ring.generateGapWalls()) }
-
-            // 3. Kolizja z GapWalls (ścianki przerw)
-            var collidedWithGap = false
-            for (gw in gapWalls) {
-                val result = getLineSegmentCollision(Offset(ballX, ballY), ballRadius, gw.start, gw.end, gw.normal)
-                if (result != null) {
-                    collidedWithGap = true
-                    val (_, dist, normal) = result
-                    val penetration = ballRadius - dist
-                    if (penetration > 0f) {
-                        ballX += normal.x * (penetration + 0.1f)
-                        ballY += normal.y * (penetration + 0.1f)
-                    }
-                    val dot = velocityX * normal.x + velocityY * normal.y
-                    if (dot < 0f) {
-                        velocityX -= dot * normal.x
-                        velocityY -= dot * normal.y
-                    }
-                }
-            }
-
-            // 4. Kolizja ze ścianami promienistymi (czerwone linie)
-            for (wall in walls) {
-                val info = getWallCollisionInfo(Offset(ballX, ballY), ballRadius, wall)
-                if (info != null) {
-                    val (_, dist, normal) = info
-                    val wallHalfWidth = 25f
-                    val penetration = (ballRadius + wallHalfWidth) - dist
-
-                    if (penetration > 0f) {
-                        ballX += normal.x * (penetration + 0.5f)
-                        ballY += normal.y * (penetration + 0.5f)
-                    }
-
-                    val dot = velocityX * normal.x + velocityY * normal.y
-                    if (dot < 0f) {
-                        velocityX -= dot * normal.x
-                        velocityY -= dot * normal.y
-                    }
-                }
-            }
-
-            // 5. Kolizja z pierścieniami (jeśli nie w gapie i nie w gapWall)
-            if (!collidedWithGap) {
-                for (index in rings.indices) {
-                    val ring = rings[index]
-                    val currentState = currentStates.getOrNull(index) ?: (false to false)
-                    val prevState = prevStates.getOrNull(index) ?: (false to false)
-
-                    // currentState.first == true oznacza "fizycznie dotykam pierścienia"
-                    if (currentState.first && !currentState.second) {
-                        val dx = ballX - ring.center.x
-                        val dy = ballY - ring.center.y
-                        val distance = hypot(dx, dy)
-
-                        if (distance > 0f) {
-                            // Sprawdzamy, czy jesteśmy bliżej wewnętrznej czy zewnętrznej krawędzi
-                            val distToInner = abs(distance - ring.innerRadius)
-                            val distToOuter = abs(distance - ring.outerRadius)
-
-                            var normalX = dx / distance
-                            var normalY = dy / distance
-                            var penetration = 0f
-
-                            if (distToInner < distToOuter) {
-                                // Odbicie od WEWNĘTRZNEJ ściany (do środka planszy)
-                                // Chcemy być na pozycji: innerRadius - ballRadius
-                                penetration = (ring.innerRadius - ballRadius) - distance
-                                // Normalna powinna wpychać nas do środka (przeciwnie do dx,dy)
-                                normalX = -normalX
-                                normalY = -normalY
-                            } else {
-                                // Odbicie od ZEWNĘTRZNEJ ściany (na zewnątrz planszy)
-                                // Chcemy być na pozycji: outerRadius + ballRadius
-                                penetration = distance - (ring.outerRadius + ballRadius)
-                                // Normalna wypycha na zewnątrz (zgodnie z dx,dy)
-                                // (tu normalX/Y są już ustawione na zewnątrz)
-                            }
-
-                            // Korekta pozycji (push out) - abs() bo penetration może wyjść ujemne przy złych założeniach, ale tutaj kierunek normalnej załatwia sprawę
-                            // Dla bezpieczeństwa używamy abs(penetration) i kierunku normalnej
-                            val pushAmount = abs(penetration) + 0.5f
-
-                            ballX += normalX * pushAmount
-                            ballY += normalY * pushAmount
-
-                            val dot = velocityX * normalX + velocityY * normalY
-                            if (dot < 0f) {
-                                velocityX -= dot * normalX
-                                velocityY -= dot * normalY
-                            }
-                        }
-                    }
-
-                    // Trigger efektów i dodawanie nowych ringów
-                    if (prevState.second && !currentState.second && !isTriggered.getOrNull(index).let { it == true }) {
-                        val angle = Math.toDegrees(kotlin.math.atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble())).let { if (it < 0) it + 360 else it }
-
-                        val effect = ring.gapEffects.minByOrNull { g -> abs(g.midAngle - angle) }
-                        effect?.let { g ->
-                            when (g.effect.type) {
-                                EffectType.WALLS -> {
-                                    when (g.effect.operation) {
-                                        Operation.ADD, Operation.SUB -> wallCountModifier += g.effect.value
-                                        Operation.MULTIPLY -> wallCountModifier = (wallCountModifier * g.effect.value).coerceAtMost(3f).coerceAtLeast(1f)
-                                        Operation.DIVIDE -> wallCountModifier = (wallCountModifier / abs(g.effect.value)).coerceAtMost(3f).coerceAtLeast(1f)
-                                    }
-                                }
-                                EffectType.GAPS -> {
-                                    when (g.effect.operation) {
-                                        Operation.ADD, Operation.SUB -> gapCountModifier += g.effect.value
-                                        Operation.MULTIPLY -> gapCountModifier = (gapCountModifier * g.effect.value).coerceAtMost(3f).coerceAtLeast(1f)
-                                        Operation.DIVIDE -> gapCountModifier = (gapCountModifier / abs(g.effect.value)).coerceAtMost(3f).coerceAtLeast(1f)
-                                    }
-                                }
-                                EffectType.TIME -> {
-                                    localTimer += g.effect.value.toInt()
-                                    if (localTimer < 0) localTimer = 0
-                                    onTimeChange(localTimer)
-                                }
-                                EffectType.POINTS -> {
-                                    when (g.effect.operation) {
-                                        Operation.ADD, Operation.SUB -> pendingPointModifier += g.effect.value
-                                        // NOWA LOGIKA: Mnożenie/Dzielenie całego wyniku (localHighScore)
-                                        Operation.MULTIPLY -> localHighScore = (localHighScore * g.effect.value).toInt().coerceAtMost(999999) // Limit max score
-                                        Operation.DIVIDE -> localHighScore = (localHighScore / abs(g.effect.value)).toInt().coerceAtLeast(0) // Minimum 0
-                                    }
-                                }
-                            }
-                        }
-
-                        while (isTriggered.size <= index) isTriggered.add(false)
-                        isTriggered[index] = true
-                        ringCount++
-
-                        val timeElapsedSeconds = (currentTime - timeSinceLastRing) / 1000f
-                        val speedBonus = maxOf(0, (50 - (timeElapsedSeconds * 5).toInt())) // 50 pkt za 0 sek, -5 za sek
-                        localHighScore += speedBonus
-                        timeSinceLastRing = currentTime
-
-                        if (ringCount == maxRings) {
-                            onWin(localHighScore)
-                        }
-
-                        val newOuter = 500f + 250f * ringCount
-                        val newInner = 450f + 250f * ringCount
-                        val baseGaps = (floor(((PI.toFloat() * newInner) / gapSize) / 6)).toInt() + 2
-                        val modifiedGaps = (baseGaps + gapCountModifier).toInt().coerceAtLeast(1)
-
-                        val newRing = RingObstacle(
-                            center = Offset(600f, 800f),
-                            outerRadius = newOuter,
-                            innerRadius = newInner,
-                            color = obstacleColor,
-                            wallsGenerated = false,
-                            ringCount = ringCount
-                        ).apply {
-                            totalExits = modifiedGaps
-                        }
-
-                        localHighScore += pendingPointModifier.toInt()
-                        pendingPointModifier = 0f
-                        ringToAdd = newRing
-
-                        onScoreChange(localHighScore)
-                    }
-
-                    while (prevStates.size <= index) prevStates.add(false to false)
-                    prevStates[index] = currentState
-                }
+            // ————— CZARNA DZIURA LOGIC ————— //
+            if (bhDelay > 0f) {
+                bhDelay -= dt
+            } else if (bhPause > 0f) {
+                bhPause -= dt
             } else {
-                for (i in rings.indices) {
-                    while (prevStates.size <= i) prevStates.add(false to false)
-                    prevStates[i] = currentStates.getOrNull(i) ?: (false to false)
+                bhRadius += GROWTH_RATE * dt
+            }
+
+            val distBH = hypot(ballX - BLACK_HOLE_CENTER.x, ballY - BLACK_HOLE_CENTER.y)
+
+            // Jeżeli kolizja z czarną dziurą -> zgłoś przegraną i przerwij pętlę
+            if (bhDelay <= 0f && distBH <= bhRadius + ballRadius) {
+                withContext(Dispatchers.Main) { onLost() }
+                stopLoop = true
+            }
+
+            // Wykonaj fizykę i detekcję kolizji poza wątkiem UI
+            withContext(Dispatchers.Default) {
+                // ————— FIZYKA KULKI ————— //
+                val ax = -gravity.x * accelerationFactor
+                val ay = (gravity.y - CALIBRATION_OFFSET_Y) * accelerationFactor
+
+                velocityX = (velocityX + ax) * friction
+                velocityY = (velocityY + ay) * friction
+
+                val speed = hypot(velocityX, velocityY)
+                if (speed > maxSpeed) {
+                    velocityX = (velocityX / speed) * maxSpeed
+                    velocityY = (velocityY / speed) * maxSpeed
                 }
             }
 
-            ringToAdd?.let {
-                if (rings.size < maxRings) {
-                    rings.add(it)
-                    prevStates.add(false to false)
-                } else {
-                    localHighScore += remainingTime * 5
-                    onWin(localHighScore)
+                ballX += velocityX * dt * 60
+                ballY += velocityY * dt * 60
+
+                // ————— KOLIZJE ————— //
+                if (rings.isNotEmpty()) {
+                    // Reuse arrays to avoid alocations co klatke
+                    val curFirst = BooleanArray(rings.size)
+                    val curSecond = BooleanArray(rings.size)
+
+                    for (i in rings.indices) {
+                        val coll = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, rings[i])
+                        curFirst[i] = coll.first
+                        curSecond[i] = coll.second
+                    }
                 }
             }
-            lastUpdateTime = currentTime // Dodanie aktualizacji czasu
-            delay(16L)
-        }
+
+                    var hitGap = false
+
+                    // Sprawdzanie kolizji z gap walls
+                    for (i in rings.indices) {
+                        val ring = rings[i]
+                        // generateGapWalls może tworzyć nową listę — staraj się nie robić tego zbyt często
+                        val gapWalls = ring.generateGapWalls()
+                        if (gapWalls.isNotEmpty()) {
+                            for (gw in gapWalls) {
+                                val res = getLineSegmentCollision(Offset(ballX, ballY), ballRadius, gw.start, gw.end, gw.normal)
+                                if (res != null) {
+                                    hitGap = true
+                                    val (_, d, n) = res
+                                    val pen = ballRadius - d
+                                    if (pen > 0f) {
+                                        ballX += n.x * (pen + 0.1f)
+                                        ballY += n.y * (pen + 0.1f)
+                                    }
+                                    val dot = velocityX * n.x + velocityY * n.y
+                                    if (dot < 0f) {
+                                        velocityX -= dot * n.x
+                                        velocityY -= dot * n.y
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Ściany
+                    for (w in walls) {
+                        val info = getWallCollisionInfo(Offset(ballX, ballY), ballRadius, w)
+                        if (info != null) {
+                            val (_, d, n) = info
+                            val pen = (ballRadius + 25f) - d
+                            if (pen > 0f) {
+                                ballX += n.x * (pen + 0.5f)
+                                ballY += n.y * (pen + 0.5f)
+                            }
+                            val dot = velocityX * n.x + velocityY * n.y
+                            if (dot < 0f) {
+                                velocityX -= dot * n.x
+                                velocityY -= dot * n.y
+                            }
+                        }
+                    }
+
+                    var ringToAdd: RingObstacle? = null
+
+                    if (!hitGap) {
+                        for (i in rings.indices) {
+                            val ring = rings[i]
+                            val cur = curFirst[i] to curSecond[i]
+                            val prev = if (i < prevStates.size) prevStates[i] else (false to false)
+
+                            if (cur.first && !cur.second) {
+                                val dx = ballX - ring.center.x
+                                val dy = ballY - ring.center.y
+                                val dist = hypot(dx, dy)
+                                if (dist > 0f) {
+                                    val innerD = abs(dist - ring.innerRadius)
+                                    val outerD = abs(dist - ring.outerRadius)
+                                    var nx = dx / dist
+                                    var ny = dy / dist
+                                    var pen = 0f
+
+                                    if (innerD < outerD) {
+                                        pen = (ring.innerRadius - ballRadius) - dist
+                                        nx = -nx
+                                        ny = -ny
+                                    } else pen = dist - (ring.outerRadius + ballRadius)
+
+                                    val push = abs(pen) + 0.5f
+                                    ballX += nx * push
+                                    ballY += ny * push
+
+                                    val dot = velocityX * nx + velocityY * ny
+                                    if (dot < 0f) {
+                                        velocityX -= dot * nx
+                                        velocityY -= dot * ny
+                                    }
+                                }
+                            }
+
+                            // GAP EFFECT (Przejście przez lukę)
+                            if (prev.second && !cur.second && !(isTriggered.getOrNull(i) ?: false)) {
+                                val angle = Math.toDegrees(
+                                    kotlin.math.atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble())
+                                ).let { if (it < 0) it + 360 else it }
+
+                                val effect = ring.gapEffects.minByOrNull { g -> abs(g.midAngle - angle) }
+                                effect?.let { g ->
+                                    when (g.effect.type) {
+                                        EffectType.TIME -> {
+                                            // Callbacky wykonujemy na głównym wątku
+                                            withContext(Dispatchers.Main) {
+                                                localTimer += g.effect.value.toInt()
+                                                if (g.effect.value > 0) bhPause += g.effect.value
+                                                onTimeChange(localTimer)
+                                            }
+                                        }
+                                        EffectType.POINTS -> {
+                                            // ZMIANA: Przetwarzanie mnożenia/dzielenia dla punktów
+                                            when (g.effect.operation) {
+                                                Operation.MULTIPLY -> localHighScore = (localHighScore * g.effect.value.toInt()).coerceAtLeast(0)
+                                                Operation.DIVIDE -> localHighScore = (localHighScore / g.effect.value.toInt()).coerceAtLeast(1) // Nigdy nie dzielimy przez 0 i nigdy mniej niż 1
+                                                // Dla ADD/SUB (które mają ujemne/dodatnie value) używamy pendingPointModifier
+                                                else -> pendingPointModifier += g.effect.value
+                                            }
+                                        }
+                                        EffectType.WALLS -> {
+                                            when (g.effect.operation) {
+                                                Operation.MULTIPLY -> wallCountModifier = (wallCountModifier * g.effect.value).toInt().coerceAtLeast(0)
+                                                // POPRAWKA: Dzielenie z zaokrąglaniem
+                                                Operation.DIVIDE -> wallCountModifier = (wallCountModifier.toFloat() / g.effect.value).roundToInt().coerceAtLeast(1)
+                                                else -> wallCountModifier += g.effect.value.toInt()
+                                            }
+                                        }
+                                        EffectType.GAPS -> {
+                                            when (g.effect.operation) {
+                                                Operation.MULTIPLY -> gapCountModifier = (gapCountModifier * g.effect.value).toInt().coerceAtLeast(0)
+                                                // POPRAWKA: Dzielenie z zaokrąglaniem
+                                                Operation.DIVIDE -> gapCountModifier = (gapCountModifier.toFloat() / g.effect.value).roundToInt().coerceAtLeast(1)
+                                                else -> gapCountModifier += g.effect.value.toInt()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (i < isTriggered.size) isTriggered[i] = true
+                                ringCount++ // Zwiększamy licznik ukończonych pierścieni
+
+                                val t = (now - timeSinceLastRing) / 1000f
+                                localHighScore += maxOf(0, 50 - (t * 5).toInt())
+                                timeSinceLastRing = now
+
+                                // Generowanie KOLEJNEGO pierścienia
+                                if (rings.size < maxRings) {
+                                    val lastRing = rings.last()
+                                    val newInner = lastRing.outerRadius + 200f // Odstęp między pierścieniami
+                                    val newOuter = newInner + 50f
+
+                                    // ZMIANA: Mniej przerw - Zmniejszamy stałą dodawaną z 2 na 1
+                                    val baseGaps = (floor(((PI.toFloat() * newInner) / gapSize) / 8)).toInt() + 1
+
+                                    // Zaczynamy liczenie "postępu" od 2. ukończonego pierścienia.
+                                    val ringsIndex = (ringCount - 2).coerceAtLeast(0)
+
+                                    // Redukcja: 1 luka mniej co 1 ukończony pierścień (agresywnie)
+                                    val reductionRate = 1
+
+                                    // Całkowita liniowa redukcja, maksymalnie 4 luki.
+                                    val difficultyReduction = (ringsIndex / reductionRate).coerceAtMost(4)
+
+                                    // ZMIANA: Mniej przerw - Upewniamy się, że zostanie co najmniej 1 przerwa
+                                    val baseGapsAdjusted = (baseGaps - difficultyReduction).coerceAtLeast(1)
+
+                                    val modGaps = (baseGapsAdjusted + gapCountModifier).toInt().coerceAtLeast(1)
+
+                                    ringToAdd = RingObstacle(
+                                        center = BLACK_HOLE_CENTER,
+                                        outerRadius = newOuter,
+                                        innerRadius = newInner,
+                                        color = obstacleColor,
+                                        wallsGenerated = false,
+                                        ringCount = ringCount
+                                    ).apply { totalExits = modGaps }
+                                }
+                                localHighScore += pendingPointModifier.toInt()
+                                pendingPointModifier = 0f
+
+                                withContext(Dispatchers.Main) { onScoreChange(localHighScore) }
+                            }
+
+                            // Aktualizacja historii stanów (robimy to po obliczeniach)
+                            if (i < prevStates.size) {
+                                prevStates[i] = cur
+                            } else {
+                                prevStates.add(cur)
+                            }
+                        }
+                    } else {
+                        // Jeśli uderzyliśmy w ścianę luki (boki), aktualizujemy tylko stan
+                        for (i in rings.indices) {
+                            if (i < prevStates.size) prevStates[i] = curFirst[i] to curSecond[i]
+                        }
+                    }
+
+                    // Dodajemy nowy pierścień do listy (tylko jeśli został wygenerowany)
+                    ringToAdd?.let {
+                        withContext(Dispatchers.Main) {
+                            rings.add(it)
+                            prevStates.add(false to false)
+                            isTriggered.add(false)
+                        }
+                    }
+                } // Koniec bloku "if (rings.isNotEmpty())"
+            } // Koniec bloku outer withContext(Dispatchers.Default)
+
+            // POPRAWKA #1: LOGIKA ZWYCIĘSTWA PRZENIESIONA TUTAJ
+            if (ringCount >= maxRings && !hasWon) {
+                localHighScore += remainingTime * 5
+                withContext(Dispatchers.Main) { onWin(localHighScore) }
+                stopLoop = true
+            }
+
+            if (stopLoop) break@loop
+
+            // zminimalizuj alokacje między klatkami
+            delay(16)
+        } // koniec pętli loop
+
+        // Pętla zakończona — ewentualne sprzątanie (jeśli potrzebne)
+        return@LaunchedEffect
     }
 
+    // WALL GENERATOR
     LaunchedEffect(rings.size) {
         if (rings.size > 1) {
-            val baseWalls = 6 + (4 * (rings.size - 2))
+            // POPRAWKA #2: Zwiększony współczynnik wzrostu z 8 na 10 (ściany rosną BARDZIEJ agresywnie)
+            val baseWalls = 6 + (10 * (rings.size - 2))
             val modifiedWalls = (baseWalls + wallCountModifier).toInt().coerceAtLeast(1) // Użyj globalnego stanu
 
             val newWalls = generateWallsBetweenRings(rings, modifiedWalls, obstacleColor)
@@ -515,14 +545,43 @@ fun GameCanvas(
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val canvasCenter = Offset(size.width / 2f, size.height / 2f)
-        val cameraOffset = canvasCenter - Offset(ballX, ballY)
-        drawContext.canvas.save()
-        drawContext.canvas.translate(cameraOffset.x, cameraOffset.y)
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val cam = center - Offset(ballX, ballY)
 
-        drawCircle(color = ballColor, radius = ballRadius, center = Offset(ballX, ballY))
-        rings.forEach { drawRingWithGaps(it) }
+        drawContext.canvas.save()
+        drawContext.canvas.translate(cam.x, cam.y)
+
+        // RYSOWANIE CZARNEJ DZIURY
+        // Rysujemy "bezpieczną strefę" jeśli jest czas ochronny
+        if (bhDelay > 0) {
+            drawCircle(
+                color = Color.Gray.copy(alpha = 0.3f),
+                radius = INITIAL_RADIUS + 10f,
+                center = BLACK_HOLE_CENTER
+            )
+        }
+
+
+        // PIERŚCIENIE
+        rings.forEach {
+            drawRingWithGaps(it)
+        }
+
+        // ŚCIANY
         drawWalls(walls)
+
+        drawCircle(
+            color = Color.Black,
+            radius = bhRadius,
+            center = BLACK_HOLE_CENTER,
+            alpha = 0.9f
+        )
+
+        drawCircle(
+            color = ballColor,
+            radius = ballRadius,
+            center = Offset(ballX, ballY)
+        )
 
         drawContext.canvas.restore()
     }

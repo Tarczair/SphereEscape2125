@@ -8,6 +8,7 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.math.abs
+import com.example.sphereescape2125.screens.obstacle.WallObstacle // Import WallObstacle
 
 // Ten parametr musi być taki sam jak w Obstacle.kt
 const val gapSizeCollision = 120f
@@ -26,8 +27,10 @@ fun isCircleCollidingWithRing(
     val collisionStart = ring.innerRadius - circleRadius
     val collisionEnd = ring.outerRadius + circleRadius
 
-    // Jeśli jesteśmy w bezpiecznym środku (distance < collisionStart)
-    // lub bezpiecznie na zewnątrz (distance > collisionEnd), to BRAK KOLIZJI.
+    // Sprawdzenie fizycznej kolizji z pierścieniem (z uwzględnieniem promienia kulki)
+    val collisionStart = ring.innerRadius - circleRadius
+    val collisionEnd = ring.outerRadius + circleRadius
+
     if (distance < collisionStart || distance > collisionEnd) {
         return false to false
     }
@@ -42,10 +45,14 @@ fun isCircleCollidingWithRing(
         )
     ).let { if (it < 0) it + 360 else it }
 
-    for (gapStart in ring.gaps) {
-        val gapAngle = (gapSizeCollision / ring.innerRadius) * (180f / PI.toFloat())
-        val gapEnd = (gapStart + gapAngle) % 360f
+    // sprawdzamy, czy kula jest w jednej z dziur (gapów)
+    for (gap in ring.gaps) {
+        val gapAngle = (gapSize / ring.innerRadius) * (180f / PI.toFloat())
+        val gapStart = gap
+        var gapEnd = (gapStart + gapAngle)
+        if (gapEnd > 360f) gapEnd -= 360f
 
+        // Sprawdzenie, czy kąt jest w luce (uwzględniające zawijanie 360 stopni)
         val inGap = if (gapEnd < gapStart) {
             angle >= gapStart || angle <= gapEnd
         } else {
@@ -59,8 +66,31 @@ fun isCircleCollidingWithRing(
         }
     }
 
-    // Dotykamy pierścienia i nie jesteśmy w dziurze -> KOLIZJA
+    // jeśli nie w dziurze, to znaczy że fizycznie dotyka pierścienia
     return true to false
+}
+
+fun getLineSegmentCollision(
+    circleCenter: Offset,
+    circleRadius: Float,
+    start: Offset,
+    end: Offset,
+    normal: Offset
+): Triple<Offset, Float, Offset>? {
+    val dx = end.x - start.x
+    val dy = end.y - start.y
+    val lenSq = dx*dx + dy*dy
+    if (lenSq == 0f) return null
+
+    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / lenSq
+    val clampedT = t.coerceIn(0f, 1f)
+    val closest = Offset(start.x + clampedT * dx, start.y + clampedT * dy)
+    val dist = hypot(circleCenter.x - closest.x, circleCenter.y - closest.y)
+
+    if (dist <= circleRadius) {
+        return Triple(closest, dist, normal)
+    }
+    return null
 }
 
 fun getWallCollisionInfo(
@@ -83,8 +113,7 @@ fun getWallCollisionInfo(
     val dy = end.y - start.y
     if (dx == 0f && dy == 0f) return null
 
-    val lenSq = dx * dx + dy * dy
-    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / lenSq
+    val t = ((circleCenter.x - start.x) * dx + (circleCenter.y - start.y) * dy) / (dx * dx + dy * dy)
     val clampedT = t.coerceIn(0f, 1f)
     val closest = Offset(start.x + clampedT * dx, start.y + clampedT * dy)
 
@@ -101,11 +130,12 @@ fun getWallCollisionInfo(
         var normalX = -dy / normalLen
         var normalY = dx / normalLen
 
-        // Upewnij się, że normal wskazuje w stronę kulki
-        val toCircleX = circleCenter.x - closest.x
-        val toCircleY = circleCenter.y - closest.y
-        val dotToCircle = normalX * toCircleX + normalY * toCircleY
-        if (dotToCircle < 0f) {
+        val vecToCircleX = circleCenter.x - closest.x
+        val vecToCircleY = circleCenter.y - closest.y
+
+        val dot = (normalX * vecToCircleX) + (normalY * vecToCircleY)
+
+        if (dot < 0) {
             normalX = -normalX
             normalY = -normalY
         }
