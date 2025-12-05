@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import com.example.sphereescape2125.screens.GapWall
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor

@@ -1,9 +1,11 @@
 package com.example.sphereescape2125.screens.obstacle
 
 import androidx.compose.ui.geometry.Offset
+import com.example.sphereescape2125.screens.WallObstacle
 import kotlin.math.PI
-import kotlin.math.hypot
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 import kotlin.math.abs
 import com.example.sphereescape2125.screens.obstacle.WallObstacle // Import WallObstacle
@@ -14,14 +16,16 @@ const val gapSizeCollision = 120f
 fun isCircleCollidingWithRing(
     circleCenter: Offset,
     circleRadius: Float,
-    ring: RingObstacle,
+    ring: RingObstacle
 ): Pair<Boolean, Boolean> {
 
-    val distance = hypot(
-        circleCenter.x - ring.center.x,
-        circleCenter.y - ring.center.y
-    )
-    val gapSize = 120f
+    val distance = hypot(circleCenter.x - ring.center.x, circleCenter.y - ring.center.y)
+
+    // Definiujemy strefę "niebezpieczną" (materiał pierścienia)
+    // Kolizja jest wtedy, gdy kulka wchodzi w zakres [innerRadius, outerRadius]
+    // Margines to promień kulki
+    val collisionStart = ring.innerRadius - circleRadius
+    val collisionEnd = ring.outerRadius + circleRadius
 
     // Sprawdzenie fizycznej kolizji z pierścieniem (z uwzględnieniem promienia kulki)
     val collisionStart = ring.innerRadius - circleRadius
@@ -31,9 +35,11 @@ fun isCircleCollidingWithRing(
         return false to false
     }
 
-    // obliczamy kąt położenia kuli
+    // Jeśli tutaj jesteśmy, to znaczy, że fizycznie dotykamy pierścienia.
+    // Teraz sprawdzamy, czy trafiliśmy w przerwę (GAP).
+
     val angle = Math.toDegrees(
-        kotlin.math.atan2(
+        atan2(
             (circleCenter.y - ring.center.y).toDouble(),
             (circleCenter.x - ring.center.x).toDouble()
         )
@@ -54,7 +60,9 @@ fun isCircleCollidingWithRing(
         }
 
         if (inGap) {
-            return false to true // kula jest w dziurze
+            // Jesteśmy w materiale pierścienia, ALE trafiliśmy w dziurę -> Bezpiecznie
+            // Zwracamy: colliding=false, insideGap=true
+            return false to true
         }
     }
 
@@ -110,6 +118,8 @@ fun getWallCollisionInfo(
     val closest = Offset(start.x + clampedT * dx, start.y + clampedT * dy)
 
     val distance = hypot(circleCenter.x - closest.x, circleCenter.y - closest.y)
+
+    // StrokeWidth ściany to 50f, więc połowa to 25f
     val wallHalfWidth = 25f
     val collisionThreshold = circleRadius + wallHalfWidth
 
