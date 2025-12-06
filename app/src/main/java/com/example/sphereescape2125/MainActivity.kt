@@ -5,24 +5,17 @@ import com.example.sphereescape2125.screens.GameScreen
 import com.example.sphereescape2125.screens.MainMenu
 import com.example.sphereescape2125.screens.StatScreen
 
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import com.example.mazeapp.ui.theme.MazeAppTheme
 
-// NOWE IMPORTY:
-import androidx.compose.runtime.collectAsState        // Do zamiany Flow na State
+// Importy do ViewModel
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
@@ -32,29 +25,36 @@ class MainActivity : ComponentActivity() {
             // 1. Pobieramy instancję MainViewModel
             val viewModel: MainViewModel = viewModel()
 
-            // 2. Obserwujemy StateFlow i zamieniamy go na State,
-            //    który Compose może odczytać.
-            //    'isDark' będzie automatycznie aktualizowane (true/false)
+            // 2. Obserwujemy StateFlow dla motywu
             val isDark by viewModel.isDarkTheme.collectAsState()
 
-            // 3. Przekazujemy dynamiczną wartość 'isDark' zamiast 'true'
             MazeAppTheme(darkTheme = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SphereEscapeApp()
+                    // ZMIANA 1: Przekazujemy viewModel tutaj
+                    SphereEscapeApp(viewModel)
                 }
             }
         }
     }
 }
+
 @Composable
-fun SphereEscapeApp() {
+fun SphereEscapeApp(viewModel: MainViewModel) { // ZMIANA 2: Dodajemy parametr viewModel
     var screen by remember { mutableStateOf("menu") }
 
     when (screen) {
-        "game" -> GameScreen(onBack = { screen = "menu" })
+        // ZMIANA 3: Przekazujemy viewModel do GameScreen
+        "game" -> GameScreen(viewModel = viewModel, onBack = { screen = "menu" })
+
         "options" -> OptionsScreen(onBack = { screen = "menu" })
-        "stats" -> OptionsScreen(onBack = { screen = "menu" })
-        "menu" -> MainMenu(onPlay = { screen = "game" },  onOptions = { screen = "options" }, onStats = { screen = "stats" })
+
+        // POPRAWKA: Miałeś tu OptionsScreen, zmieniłem na StatScreen zgodnie z importem
+        "stats" -> StatScreen(onBack = { screen = "menu" })
+
+        "menu" -> MainMenu(
+            onPlay = { screen = "game" },
+            onOptions = { screen = "options" },
+            onStats = { screen = "stats" }
+        )
     }
 }
-
