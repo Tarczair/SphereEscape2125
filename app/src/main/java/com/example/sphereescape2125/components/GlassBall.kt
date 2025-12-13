@@ -25,9 +25,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * To jest CZYSTA grafika kulki.
- * Przyjmuje 'baseColor', więc można ją łatwo przemalować.
- * Użyj tego w grze jako postać gracza (Player) lub jako element dekoracyjny.
+ * Komponent graficzny renderujący stylizowaną, szklaną kulę.
+ *
+ * Funkcja wykorzystuje natywny [Canvas] do narysowania obiektu z efektem pseudo-3D.
+ * Składa się z kilku warstw rysowanych w następującej kolejności:
+ * 1. Cień pod obiektem (dla efektu lewitacji).
+ * 2. Główna bryła z gradientem radialnym (efekt szkła).
+ * 3. Obrys (krawędź).
+ * 4. Refleks świetlny (błysk) i odbicie dolne.
+ *
+ * @param modifier Modyfikator układu dla tego elementu.
+ * @param baseColor Kolor bazowy kuli. Domyślnie [Color.Cyan].
  */
 @Composable
 fun GlassBall(
@@ -38,19 +46,19 @@ fun GlassBall(
         val radius = size.minDimension / 2
         val centerOffset = Offset(size.width / 2, size.height / 2)
 
-        // 1. Cień pod kulką (żeby lewitowała)
+
         drawCircle(
             color = Color.Black.copy(alpha = 0.3f),
             radius = radius * 0.9f,
             center = centerOffset + Offset(x = radius * 0.15f, y = radius * 0.2f)
         )
 
-        // 2. Główna bryła (Gradient - efekt szkła)
+
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    baseColor.copy(alpha = 0.1f), // Środek bardzo jasny/przezroczysty
-                    baseColor.copy(alpha = 0.6f)  // Brzegi nasycone
+                    baseColor.copy(alpha = 0.1f),
+                    baseColor.copy(alpha = 0.6f)
                 ),
                 center = centerOffset,
                 radius = radius
@@ -59,7 +67,7 @@ fun GlassBall(
             center = centerOffset
         )
 
-        // 3. Krawędź (Obrys)
+
         drawCircle(
             color = baseColor.copy(alpha = 0.8f),
             radius = radius,
@@ -67,7 +75,7 @@ fun GlassBall(
             style = Stroke(width = radius * 0.05f)
         )
 
-        // 4. BŁYSK (Refleks świetlny - kluczowy dla efektu 3D)
+
         drawOval(
             color = Color.White.copy(alpha = 0.9f),
             topLeft = Offset(
@@ -77,7 +85,7 @@ fun GlassBall(
             size = Size(width = radius * 0.5f, height = radius * 0.3f)
         )
 
-        // 5. Odbicie od dołu (światło odbite od podłogi)
+
         drawOval(
             color = Color.White.copy(alpha = 0.4f),
             topLeft = Offset(
@@ -90,8 +98,14 @@ fun GlassBall(
 }
 
 /**
- * To jest interaktywny PRZYCISK w kształcie kulki.
- * Tu decydujemy o dynamicznych kolorach w zależności od motywu (światła).
+ * Interaktywny przycisk w kształcie szklanej kuli z etykietą tekstową.
+ *
+ * Komponent ten dostosowuje swój kolor do aktualnego motywu aplikacji (jasny/ciemny)
+ * na podstawie luminancji tła. Zawiera animację skalowania (zmniejszania)
+ * w momencie wciśnięcia.
+ *
+ * @param modifier Modyfikator układu.
+ * @param onClick Funkcja wywoływana po kliknięciu przycisku.
  */
 @Composable
 fun PlayGlassBallButton(
@@ -101,13 +115,10 @@ fun PlayGlassBallButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // --- LOGIKA KOLORÓW ---
-    // 1. Sprawdzamy jasność tła z aktualnego MaterialTheme (zmienianego przez czujnik)
+
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    // 2. Definiujemy kolor kulki:
-    // Ciemny motyw -> Cyan (Neonowy błękit)
-    // Jasny motyw -> Intensywna Czerwień (Red Accent - wygląda jak rubin)
+
     val ballColor = if (isDark) {
         Color.Cyan
     } else {
@@ -117,7 +128,7 @@ fun PlayGlassBallButton(
 
     val textColor = if (isDark) Color.White else Color(0xFF1C1B1F)
 
-    // Animacja "wciśnięcia" przycisku
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
         animationSpec = tween(durationMillis = 100),
@@ -130,16 +141,16 @@ fun PlayGlassBallButton(
             .scale(scale)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null // Wyłączamy standardowy cień Androida
+                indication = null
             ) { onClick() }
     ) {
-        // Rysujemy kulkę z dynamicznym kolorem
+
         GlassBall(
             modifier = Modifier.matchParentSize(),
             baseColor = ballColor
         )
 
-        // Rysujemy tekst na wierzchu
+
         Text(
             text = "GRAJ",
             color = textColor,

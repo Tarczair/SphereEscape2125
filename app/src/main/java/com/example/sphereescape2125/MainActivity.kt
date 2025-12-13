@@ -18,19 +18,29 @@ import com.example.mazeapp.ui.theme.MazeAppTheme
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 
+
+/**
+ * Główna aktywność startowa aplikacji Sphere Escape 2125.
+ *
+ * Klasa ta pełni rolę punktu wejścia (Entry Point) dla interfejsu użytkownika.
+ * Odpowiada za:
+ * 1. Inicjalizację głównego [MainViewModel].
+ * 2. Obserwowanie globalnego stanu motywu (Ciemny/Jasny) sterowanego czujnikiem światła.
+ * 3. Ustawienie głównego kontenera nawigacji [SphereEscapeApp].
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // 1. Pobieramy instancję MainViewModel
+
             val viewModel: MainViewModel = viewModel()
 
-            // 2. Obserwujemy StateFlow dla motywu
+
             val isDark by viewModel.isDarkTheme.collectAsState()
 
             MazeAppTheme(darkTheme = isDark) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // ZMIANA 1: Przekazujemy viewModel tutaj
+
                     SphereEscapeApp(viewModel)
                 }
             }
@@ -38,17 +48,32 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Główny kompozyt (Composable) zarządzający nawigacją w aplikacji.
+ *
+ * Funkcja pełni rolę prostego routera, przełączającego widoki na podstawie
+ * lokalnego stanu `screen`. Przekazuje również instancję [MainViewModel]
+ * do ekranów, które tego wymagają (np. [GameScreen]).
+ *
+ * Dostępne ekrany:
+ * - "menu": Menu główne.
+ * - "game": Właściwa rozgrywka.
+ * - "options": Ekran opcji.
+ * - "stats": Ekran statystyk.
+ *
+ * @param viewModel Główny ViewModel aplikacji, współdzielony między ekranami.
+ */
 @Composable
-fun SphereEscapeApp(viewModel: MainViewModel) { // ZMIANA 2: Dodajemy parametr viewModel
+fun SphereEscapeApp(viewModel: MainViewModel) {
     var screen by remember { mutableStateOf("menu") }
 
     when (screen) {
-        // ZMIANA 3: Przekazujemy viewModel do GameScreen
+
         "game" -> GameScreen(viewModel = viewModel, onBack = { screen = "menu" })
 
         "options" -> OptionsScreen(onBack = { screen = "menu" })
 
-        // POPRAWKA: Miałeś tu OptionsScreen, zmieniłem na StatScreen zgodnie z importem
+
         "stats" -> StatScreen(onBack = { screen = "menu" })
 
         "menu" -> MainMenu(

@@ -14,59 +14,90 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
+/**
+ * Główny ViewModel aplikacji, zarządzający stanem globalnym i logiką gry.
+ *
+ * Odpowiada za:
+ * - Automatyczne przełączanie motywu (Ciemny/Jasny) na podstawie odczytów z czujnika światła.
+ * - Obsługę gestu potrząśnięcia urządzeniem i komunikację tego zdarzenia do warstwy UI.
+ *
+ * Klasa dziedziczy po [AndroidViewModel], aby mieć dostęp do kontekstu aplikacji
+ * wymaganego przez sensory.
+ *
+ * @param application Kontekst aplikacji.
+ */
 
-// Używamy AndroidViewModel, aby bezpiecznie uzyskać dostęp do Kontekstu (Application)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
-    // 1. Instancja naszego czujnika
-    // Przekazujemy kontekst aplikacji, którego wymaga LightSensor
+
     private val lightSensor: LightSensor = LightSensor(application)
 
-    // 2. Prywatny, modyfikowalny stan (nasze "1 lub 0")
-    // Domyślnie ustawiamy motyw jasny (false)
+
     private val _isDarkTheme = MutableStateFlow(false)
 
-    // 3. Publiczny, niemodyfikowalny stan (StateFlow), którego będzie słuchać UI
+    /**
+     * Publiczny strumień określający, czy aplikacja powinna używać ciemnego motywu.
+     *
+     * Wartość jest aktualizowana w czasie rzeczywistym na podstawie danych z [LightSensor].
+     * - `true`: Otoczenie jest ciemne (poniżej [LIGHT_SENSOR_THRESHOLD]).
+     * - `false`: Otoczenie jest jasne.
+     */
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
-    // 4. Próg czujnika - dostosuj tę wartość eksperymentalnie!
-    // Poniżej tej wartości (w luksach) włączy się tryb ciemny.
+    /**
+     * Próg natężenia światła w luksach (lx).
+     * Poniżej tej wartości aktywowany jest tryb ciemny.
+     */
     private val LIGHT_SENSOR_THRESHOLD = 100f
 
-    // 5. Blok 'init' uruchamia się raz, gdy ViewModel jest tworzony
+
     init {
-        // Uruchamiamy korutynę w 'viewModelScope',
-        // która automatycznie anuluje się, gdy ViewModel zostanie zniszczony
+
         viewModelScope.launch {
-            // Rozpoczynamy obserwowanie strumienia z czujnika
+
             lightSensor.sensorReadings.collect { luxValue ->
-                // To jest nasza logika "1 lub 0"
-                // Jeśli światło jest poniżej progu, ustawiamy _isDarkTheme.value na true
+
                 val isDark = luxValue < LIGHT_SENSOR_THRESHOLD
 
-                // Aktualizujemy stan, co automatycznie powiadomi UI (MainActivity)
+
                 _isDarkTheme.value = isDark
             }
         }
     }
 
 
-    // --- SHAKE LOGIC (NAPRAWIONE) ---
-
-    // Zamiast robić animację tutaj, wysyłamy tylko SYGNAŁ do ekranu
+    // --- SHAKE LOGIC ---
     private val _shakeEvent = Channel<Unit>(Channel.BUFFERED)
+
+    /**
+     * Strumień zdarzeń typu "fire-and-forget" informujący UI o wystąpieniu wstrząsu.
+     *
+     * Wykorzystuje [Channel], ponieważ zdarzenie wstrząsu jest jednorazowe
+     * i nie stanowi trwałego stanu (w przeciwieństwie do StateFlow).
+     * Służy do wyzwalania animacji lub efektów dźwiękowych w warstwie widoku.
+     */
     val shakeEvent = _shakeEvent.receiveAsFlow()
 
+    /**
+     * Metoda wywoływana, gdy zewnętrzny detektor (ShakeDetector) wykryje wstrząs.
+     *
+     * Inicjuje logikę gry (zmianę układu ścian) oraz emituje zdarzenie do [shakeEvent].
+     */
     fun onShakeDetected() {
         viewModelScope.launch {
-            // Logika gry (zmiana ścian)
+
             randomizeWalls()
 
-            // Wyślij sygnał do UI: "Zacznij trząść!"
+
             _shakeEvent.send(Unit)
         }
     }
 
+    /**
+     * Logika odpowiedzialna za losową zmianę konfiguracji przeszkód w grze.
+     *
+     * (Metoda wewnętrzna - implementacja logiki gry).
+     */
     private fun randomizeWalls() {
         println("SHAKE: Logika zmiany ścian (ViewModel)")
 
