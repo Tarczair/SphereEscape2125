@@ -2,13 +2,18 @@ package com.example.sphereescape2125
 
 
 import android.app.Application
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sphereescape2125.sensors.LightSensor
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+
 
 // Używamy AndroidViewModel, aby bezpiecznie uzyskać dostęp do Kontekstu (Application)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -44,4 +49,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-}
+
+
+    // --- SHAKE LOGIC (NAPRAWIONE) ---
+
+    // Zamiast robić animację tutaj, wysyłamy tylko SYGNAŁ do ekranu
+    private val _shakeEvent = Channel<Unit>(Channel.BUFFERED)
+    val shakeEvent = _shakeEvent.receiveAsFlow()
+
+    fun onShakeDetected() {
+        viewModelScope.launch {
+            // Logika gry (zmiana ścian)
+            randomizeWalls()
+
+            // Wyślij sygnał do UI: "Zacznij trząść!"
+            _shakeEvent.send(Unit)
+        }
+    }
+
+    private fun randomizeWalls() {
+        println("SHAKE: Logika zmiany ścian (ViewModel)")
+
+    }
+    }
+
+
