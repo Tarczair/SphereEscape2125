@@ -1,4 +1,4 @@
-package com.example.sphereescape2125.sensors // Upewnij się, że pakiet jest dobry
+package com.example.sphereescape2125.sensors
 
 import android.content.Context
 import android.hardware.Sensor
@@ -12,27 +12,49 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * Zarządza czujnikiem grawitacji (przechyłu) i udostępnia dane jako StateFlow.
+ * Zarządza czujnikiem grawitacji (przechyłu) urządzenia.
+ *
+ * Klasa ta implementuje interfejs [SensorEventListener], aby odbierać surowe dane
+ * z sensora sprzętowego (typu [Sensor.TYPE_GRAVITY]) i udostępniać je
+ * w reaktywny sposób za pomocą strumienia [StateFlow].
+ *
+ * Służy do sterowania elementami gry poprzez fizyczne przechylanie urządzenia.
+ *
+ * @param context Kontekst aplikacji wymagany do uzyskania dostępu do usługi [SensorManager].
  */
 class TiltSensor(
     context: Context
 ) : SensorEventListener {
 
-    // Pobieramy systemowy SensorManager
+
     private val sensorManager =
         context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
-    // Znajdujemy domyślny czujnik grawitacji
+
     private val gravitySensor: Sensor? =
         sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)
 
-    // Prywatny, mutowalny stan
+
     private val _gravityData = MutableStateFlow(Offset(0f, 0f))
-    // Publiczny, niemutowalny stan, który Composable będzie czytać
+
+    /**
+     * Publiczny strumień danych o aktualnym wychyleniu urządzenia.
+     *
+     * Wartość emitowana to [Offset], gdzie:
+     * - `x` odpowiada wychyleniu w osi poziomej.
+     * - `y` odpowiada wychyleniu w osi pionowej.
+     */
+
     val gravityData: StateFlow<Offset> = _gravityData.asStateFlow()
 
     /**
-     * Rejestruje słuchacza. Należy wywołać, gdy ekran staje się widoczny.
+     * Rejestruje nasłuchiwanie zdarzeń z czujnika grawitacji.
+     *
+     * Metodę należy wywołać w momencie startu gry lub wznowienia widoku,
+     * aby rozpocząć odbieranie danych. Używa flagi [SensorManager.SENSOR_DELAY_GAME]
+     * dla zapewnienia płynności sterowania.
+     *
+     * Jeśli urządzenie nie posiada odpowiedniego sensora, metoda kończy działanie bez błędu.
      */
     fun startListening() {
         if (gravitySensor == null) {
@@ -47,13 +69,22 @@ class TiltSensor(
     }
 
     /**
-     * Wyrejestrowuje słuchacza. Kluczowe dla oszczędzania baterii.
+     * Wyrejestrowuje nasłuchiwanie zdarzeń z czujnika.
+     *
+     * Metodę należy bezwzględnie wywołać przy wstrzymaniu gry lub niszczeniu widoku,
+     * aby zapobiec zbędnemu zużyciu baterii przez sensor działający w tle.
      */
     fun stopListening() {
         sensorManager.unregisterListener(this)
     }
 
-    // --- Metody z interfejsu SensorEventListener ---
+    /**
+     * Wywoływana przez system, gdy zmienią się wskazania sensora.
+     *
+     * Aktualizuje stan [_gravityData] nowymi współrzędnymi pobranymi z [event].
+     *
+     * @param event Obiekt zawierający nowe dane sensora (wartości x i y).
+     */
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_GRAVITY) {
@@ -63,8 +94,15 @@ class TiltSensor(
             }
         }
     }
-
+    /**
+     * Wywoływana przez system, gdy zmieni się dokładność sensora.
+     *
+     * Obecnie implementacja jest pusta, gdyż gra nie wymaga dynamicznej reakcji na zmiany dokładności.
+     *
+     * @param sensor Sensor, którego dokładność uległa zmianie.
+     * @param accuracy Nowy poziom dokładności.
+     */
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Zazwyczaj nie musimy nic tu robić
+
     }
 }

@@ -15,19 +15,34 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.luminance
 import kotlin.random.Random
 
-// W pliku MainMenu.kt (lub osobno, jeśli chcesz to reutilizować)
 
-// --- DEFINICJA KOLORÓW DLA TŁA ---
-// Ciemny motyw (Space)
+// --- PALETA KOLORÓW TŁA ---
+
+/** Górny kolor gradientu dla motywu ciemnego (przestrzeń kosmiczna). */
 val DarkBgTop = Color(0xFF1E232E)
+/** Dolny kolor gradientu dla motywu ciemnego. */
 val DarkBgBottom = Color(0xFF0A0C10)
+/** Kolor cząsteczek w motywie ciemnym (gwiazdy/pył). */
 val DarkParticle = Color.White
 
-// Jasny motyw (Sky)
-val LightBgTop = Color(0xFFE3F2FD) // Bardzo jasny błękit
-val LightBgBottom = Color(0xFFBBDEFB) // Niebieski
-val LightParticle = Color(0xFF1565C0) // Ciemny niebieski (żeby było widać kropki)
 
+/** Górny kolor gradientu dla motywu jasnego (błękit nieba). */
+val LightBgTop = Color(0xFFE3F2FD)
+/** Dolny kolor gradientu dla motywu jasnego. */
+val LightBgBottom = Color(0xFFBBDEFB)
+/** Kolor cząsteczek w motywie jasnym. */
+val LightParticle = Color(0xFF1565C0)
+
+/**
+ * Model danych reprezentujący pojedynczą cząsteczkę w animacji tła.
+ *
+ * @property x Aktualna pozycja pozioma na ekranie.
+ * @property y Aktualna pozycja pionowa na ekranie.
+ * @property size Promień cząsteczki.
+ * @property speedY Prędkość wznoszenia się cząsteczki.
+ * @property color Kolor (wraz z kanałem alfa).
+ * @property initialDelay Opóźnienie startowe, aby cząsteczki nie pojawiały się jednocześnie.
+ */
 data class Particle(
     var x: Float,
     var y: Float,
@@ -37,6 +52,18 @@ data class Particle(
     val initialDelay: Long
 )
 
+/**
+ * Komponent tła renderujący dynamiczny gradient z animowanymi cząsteczkami.
+ *
+ * Tworzy efekt atmosferyczny dostosowany do aktualnego motywu:
+ * - W trybie ciemnym: Efekt kosmosu/głębi z jasnymi drobinami.
+ * - W trybie jasnym: Efekt nieba z ciemniejszymi drobinami.
+ *
+ * Animacja wykorzystuje [Canvas] do rysowania dużej liczby obiektów bez obciążania układu kompozycji.
+ *
+ * @param modifier Modyfikator układu (domyślnie wypełnia dostępną przestrzeń).
+ * @param isDark Flaga określająca tryb kolorystyczny. Domyślnie obliczana na podstawie luminancji tła motywu.
+ */
 @Composable
 fun AnimatedParticleBackground(
     modifier: Modifier = Modifier,
@@ -45,10 +72,10 @@ fun AnimatedParticleBackground(
 ) {
     val particles = remember { mutableStateListOf<Particle>() }
 
-    // Ustawiamy kolory w zależności od motywu
-    val particleBaseColor = if (isDark) DarkParticle else LightParticle
 
-    LaunchedEffect(isDark) { // Resetujemy cząsteczki jak zmieni się motyw
+    val particleBaseColor = if (isDark) DarkParticle else LightParticle
+    // Inicjalizacja lub reset cząsteczek przy zmianie motywu
+    LaunchedEffect(isDark) {
         particles.clear()
         repeat(50) {
             particles.add(
@@ -79,7 +106,7 @@ fun AnimatedParticleBackground(
         val canvasWidth = size.width
         val canvasHeight = size.height
 
-        // Rysowanie TŁA (Gradient) zależnie od motywu
+        // 1. Rysowanie TŁA (Gradient)
         drawRect(
             brush = Brush.verticalGradient(
                 colors = if (isDark) listOf(DarkBgTop, DarkBgBottom)
@@ -89,10 +116,12 @@ fun AnimatedParticleBackground(
             )
         )
 
-        // Rysowanie CZĄSTECZEK
+        // 2. Symulacja i rysowanie CZĄSTECZEK
         particles.forEach { particle ->
             if (System.currentTimeMillis() - particle.initialDelay > 0) {
+                // Aktualizacja pozycji (ruch w górę)
                 particle.y -= particle.speedY * elapsedTime
+                // Reset cząsteczki, gdy wyleci poza górną krawędź
                 if (particle.y < 0f) {
                     particle.y = canvasHeight + Random.nextFloat() * 100f
                     particle.x = Random.nextFloat() * canvasWidth
