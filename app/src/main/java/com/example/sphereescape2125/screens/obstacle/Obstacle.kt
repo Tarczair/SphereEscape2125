@@ -5,7 +5,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import com.example.sphereescape2125.screens.GapWall
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
@@ -84,8 +83,8 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
         }
     }
 
-    // finalValue: Dla SUB i DIV musi być ujemne.
-    val finalValue = if (op == Operation.SUB || op == Operation.DIVIDE) -value else value
+    // finalValue: Dla SUB musi być ujemne.
+    val finalValue = if (op == Operation.SUB) -value else value
 
     val icon = when(effectType) {
         EffectType.WALLS -> "🧱"
