@@ -14,6 +14,18 @@ import androidx.compose.ui.unit.sp
 import com.example.sphereescape2125.components.GlassButton
 import com.example.sphereescape2125.ui.theme.AnimatedParticleBackground
 
+/**
+ * Ekran prezentujący statystyki i osiągnięcia gracza.
+ *
+ * Komponent ten odpowiada za odczyt trwale zapisanych danych z [SharedPreferences]
+ * (pod kluczem "SphereEscapePrefs"). Głównym elementem jest prezentacja najlepszego wyniku (HighScore),
+ * który jest aktualizowany po zakończeniu każdej gry w [GameScreen].
+ *
+ * Wizualnie ekran wykorzystuje [AnimatedParticleBackground] oraz półprzezroczyste panele,
+ * zachowując spójność ze stylem "Glassmorphism" aplikacji.
+ *
+ * @param onBack Funkcja zwrotna wywoływana przy żądaniu powrotu do menu głównego.
+ */
 @Composable
 fun StatScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -28,7 +40,7 @@ fun StatScreen(onBack: () -> Unit) {
             modifier = Modifier.padding(24.dp)
         ) {
             Text(
-                "STATYSTYKI",
+                text = "STATYSTYKI",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -41,8 +53,13 @@ fun StatScreen(onBack: () -> Unit) {
                 shape = MaterialTheme.shapes.large
             ) {
                 Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("NAJLEPSZY WYNIK", color = Color.Cyan, fontSize = 14.sp)
-                    Text("$highScore", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                    Text(text = "NAJLEPSZY WYNIK", color = Color.Cyan, fontSize = 14.sp)
+                    Text(
+                        text = "$highScore",
+                        color = Color.White,
+                        fontSize = 64.sp,
+                        fontWeight = FontWeight.Black
+                    )
                 }
             }
 

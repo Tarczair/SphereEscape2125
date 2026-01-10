@@ -15,38 +15,41 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-// --- IMPORTY TWOICH KOMPONENTÓW ---
 import com.example.sphereescape2125.ui.theme.AnimatedParticleBackground
 import com.example.sphereescape2125.components.GlassButton
 
+/**
+ * Ekran ustawień aplikacji.
+ *
+ * Umożliwia użytkownikowi:
+ * - Regulację głośności muzyki i efektów dźwiękowych za pomocą suwaków.
+ * - Zresetowanie postępów gry (funkcja niszcząca).
+ *
+ * Komponent w pełni adaptuje się do aktualnego motywu (Jasny/Ciemny),
+ * dynamicznie zmieniając kolory tekstów, suwaków oraz styl przycisku resetowania
+ * (czerwona poświata w trybie ciemnym, granatowa w jasnym).
+ *
+ * @param onBack Funkcja wywoływana po naciśnięciu przycisku powrotu.
+ */
 @Composable
 fun OptionsScreen(onBack: () -> Unit) {
     var musicVolume by remember { mutableStateOf(0.5f) }
     var soundVolume by remember { mutableStateOf(0.7f) }
 
-    // --- LOGIKA KOLORÓW ---
-    // 1. Sprawdzamy jasność tła
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    // 2. Definiujemy dynamiczne kolory tekstów
-    val mainTextColor = if (isDark) Color.White else Color(0xFF1C1B1F) // Biały vs Ciemny Grafit
+    val mainTextColor = if (isDark) Color.White else Color(0xFF1C1B1F)
     val secondaryTextColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF1C1B1F).copy(alpha = 0.8f)
 
-    // 3. Kolory slidera
     val sliderInactiveColor = if (isDark) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.1f)
-    val sliderActiveColor = if (isDark) Color.Cyan else Color(0xFF00897B) // Turkusowy w jasnym
+    val sliderActiveColor = if (isDark) Color.Cyan else Color(0xFF00897B)
 
-    // 1. Box jako główny kontener (warstwy)
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // 2. TŁO: Cząsteczki
         AnimatedParticleBackground(modifier = Modifier.fillMaxSize())
 
-        // 3. TREŚĆ
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -54,7 +57,6 @@ fun OptionsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // TYTUŁ "OPCJE"
             Text(
                 text = "OPCJE",
                 color = mainTextColor,
@@ -79,7 +81,8 @@ fun OptionsScreen(onBack: () -> Unit) {
                 modifier = Modifier.padding(bottom = 40.dp)
             )
 
-            // SEKCJA: MUZYKA
+            // --- SEKCJA AUDIO ---
+
             Text(
                 text = "Głośność muzyki: ${(musicVolume * 100).toInt()}%",
                 color = secondaryTextColor,
@@ -88,7 +91,6 @@ fun OptionsScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
             )
 
-            // Stylowany Slider (Suwak)
             Slider(
                 value = musicVolume,
                 onValueChange = { musicVolume = it },
@@ -101,7 +103,6 @@ fun OptionsScreen(onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // SEKCJA: DŹWIĘKI
             Text(
                 text = "Głośność efektów: ${(soundVolume * 100).toInt()}%",
                 color = secondaryTextColor,
@@ -121,26 +122,22 @@ fun OptionsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(50.dp))
 
-            // --- PRZYCISK RESET (DYNAMICZNY) ---
+            // --- SEKCJA RESETOWANIA DANYCH ---
+
             val resetButtonBrush = if (isDark) {
-                // Ciemny motyw: Czerwone, "żarzące się" szkło
                 Brush.horizontalGradient(
                     colors = listOf(Color(0xFFD32F2F).copy(alpha = 0.3f), Color(0xFFB71C1C).copy(alpha = 0.5f))
                 )
             } else {
-                // Jasny motyw: Ciemnogranatowe szkło (Navy Blue)
-                // Używamy alpha, żeby zachować efekt szkła, ale kolory są ciemne, żeby kontrastowały z tłem
                 Brush.horizontalGradient(
                     colors = listOf(
-                        Color(0xFF1A237E).copy(alpha = 0.7f), // Ciemny Indygo
-                        Color(0xFF0D47A1).copy(alpha = 0.8f)  // Ciemny Niebieski
+                        Color(0xFF1A237E).copy(alpha = 0.7f),
+                        Color(0xFF0D47A1).copy(alpha = 0.8f)
                     )
                 )
             }
 
-            // Kolor ramki
             val resetButtonBorder = if (isDark) Color.Red.copy(alpha = 0.5f) else Color(0xFF283593).copy(alpha = 0.5f)
-            // Kolor cienia (poświaty)
             val resetButtonShadow = if (isDark) Color.Red else Color(0xFF1A237E).copy(alpha = 0.5f)
 
             Box(
@@ -158,16 +155,14 @@ fun OptionsScreen(onBack: () -> Unit) {
             ) {
                 Text(
                     text = "RESETUJ POSTĘP",
-                    color = Color.White, // Biały tekst wygląda świetnie i na czerwonym, i na granatowym
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
             }
 
-            // Tekst ostrzegawczy pod przyciskiem
             Text(
                 text = "Tej operacji nie można cofnąć.",
-                // W ciemnym motywie czerwony, w jasnym granatowy (dopasowany do przycisku)
                 color = if (isDark) Color.Red.copy(alpha = 0.8f) else Color(0xFF1A237E).copy(alpha = 0.8f),
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp)
@@ -175,7 +170,6 @@ fun OptionsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(40.dp))
 
-            // PRZYCISK POWROTU
             GlassButton(
                 text = "WRÓĆ",
                 onClick = onBack
