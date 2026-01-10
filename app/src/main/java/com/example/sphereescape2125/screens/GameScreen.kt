@@ -1,12 +1,8 @@
 package com.example.sphereescape2125.screens
 
-// --- IMPORTY SYSTEMOWE ---
 import android.app.Activity
-import android.view.WindowManager
 import android.content.Context
-import android.widget.Toast
-
-// --- IMPORTY COMPOSE ---
+import android.view.WindowManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -22,19 +18,23 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-
-// --- IMPORTY TWOJEGO PROJEKTU ---
 import com.example.sphereescape2125.MainViewModel
 import com.example.sphereescape2125.screens.obstacle.*
 import com.example.sphereescape2125.sensors.ShakeDetector
 import com.example.sphereescape2125.sensors.TiltSensor
-
-// --- IMPORTY MATEMATYCZNE I KORUTYNY ---
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.*
 
+/**
+ * Ekran wyświetlany po przegranej rozgrywce (Game Over).
+ *
+ * Blokuje interakcję z grą, wyświetla komunikat o przyczynie porażki (czas lub czarna dziura)
+ * i umożliwia powrót do menu głównego. Tło jest półprzezroczyste, aby gracz widział moment porażki.
+ *
+ * @param onBack Funkcja wywoływana po kliknięciu przycisku powrotu.
+ */
 @Composable
 fun GameOverScreen(onBack: () -> Unit) {
     Column(
@@ -54,6 +54,13 @@ fun GameOverScreen(onBack: () -> Unit) {
     }
 }
 
+/**
+ * Komponent narzędziowy zapobiegający wygaszaniu ekranu.
+ *
+ * Wykorzystuje flagę systemową [WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON].
+ * Jest to kluczowe w grach sterowanych ruchem, gdzie użytkownik nie dotyka ekranu,
+ * co system mógłby zinterpretować jako bezczynność.
+ */
 @Composable
 fun AndroidKeepScreenOn() {
     val context = LocalContext.current
@@ -64,12 +71,25 @@ fun AndroidKeepScreenOn() {
     }
 }
 
+/**
+ * Główny kontener ekranu rozgrywki.
+ *
+ * Odpowiada za:
+ * 1. Inicjalizację sensorów (w tym [ShakeDetector] dla mechaniki wstrząsów).
+ * 2. Zarządzanie globalnym stanem gry (zwycięstwo, porażka, wynik, czas).
+ * 3. Obsługę efektu wizualnego trzęsienia ekranem (Shake Animation) przy wykryciu wstrząsu.
+ * 4. Wyświetlanie warstwy HUD oraz ekranów końcowych (Victory/GameOver).
+ *
+ * Renderowanie właściwej rozgrywki delegowane jest do [GameCanvas].
+ *
+ * @param viewModel ViewModel aplikacji (obecnie nieużywany bezpośrednio w logice, ale przekazywany dla spójności).
+ * @param onBack Callback nawigacyjny powrotu do menu.
+ */
 @Composable
 fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     AndroidKeepScreenOn()
     val context = LocalContext.current
 
-    // ================= SHAKE EVENT =================
     var shakeEvent by remember { mutableIntStateOf(0) }
 
     val shakeOffsetX = remember { Animatable(0f) }
@@ -87,7 +107,6 @@ fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     }
 
     LaunchedEffect(shakeEvent) {
-
         if (shakeEvent > 0) {
             repeat(2) {
                 shakeOffsetX.animateTo(15f, tween(50))
@@ -100,7 +119,6 @@ fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
     }
 
-    // ================= SCORE / STATE =================
     val prefs = remember { context.getSharedPreferences("SphereEscapePrefs", Context.MODE_PRIVATE) }
     var bestScore by remember { mutableIntStateOf(prefs.getInt("HighScore", 100)) }
 
@@ -151,6 +169,14 @@ fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     }
 }
 
+/**
+ * Wyświetlacz przezierny (Head-Up Display) prezentujący kluczowe parametry w trakcie gry.
+ *
+ * Pokazuje:
+ * - Aktualny poziom.
+ * - Bieżący wynik punktowy.
+ * - Pozostały czas (zmienia kolor na czerwony, gdy zostało < 10 sekund).
+ */
 @Composable
 fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
     Column(
@@ -164,7 +190,7 @@ fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("POZIOM I", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em))
+
             Text("WYNIK: $currentScore", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em), modifier = Modifier.padding(top = 8.dp))
 
             val timeColor = if(timeLeft < 10) Color.Red else MaterialTheme.colorScheme.onBackground
@@ -179,6 +205,12 @@ fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
     }
 }
 
+/**
+ * Ekran zwycięstwa.
+ *
+ * Wyświetlany po pomyślnym ukończeniu wszystkich pierścieni.
+ * Prezentuje wynik końcowy oraz zapisany najlepszy wynik.
+ */
 @Composable
 fun VictoryScreen(points: Int, bestScore: Int, onBack: () -> Unit) {
     Box(
@@ -196,6 +228,20 @@ fun VictoryScreen(points: Int, bestScore: Int, onBack: () -> Unit) {
     }
 }
 
+/**
+ * Oblicza liczbę ścian do wygenerowania w luce między pierścieniami.
+ *
+ * Algorytm bazuje na:
+ * 1. Promieniu pierścienia (im dalej, tym więcej miejsca na ściany).
+ * 2. Indeksie pierścienia (im wyższy poziom, tym trudniej).
+ * 3. Modyfikatorach dynamicznych [wallCountModifier] i [wallMultiplier] zdobywanych w trakcie gry.
+ *
+ * @param ringIndex Numer kolejny pierścienia (0-indexed).
+ * @param ring Obiekt pierścienia [RingObstacle].
+ * @param wallCountModifier Addytywny modyfikator liczby ścian (Buff/Debuff).
+ * @param wallMultiplier Mnożnikowy modyfikator liczby ścian (Buff/Debuff).
+ * @return Całkowita liczba ścian do wygenerowania.
+ */
 fun calculateWallCount(
     ringIndex: Int,
     ring: RingObstacle,
@@ -210,11 +256,37 @@ fun calculateWallCount(
         .coerceAtLeast(1)
 }
 
-
-// ————————————————————————————————————————————————
-//                         GAME CANVAS
-// ————————————————————————————————————————————————
-
+/**
+ * Serce silnika gry (Game Engine) - komponent odpowiedzialny za logikę fizyki, renderowanie i stan świata.
+ *
+ * Funkcja ta implementuje:
+ * - **Pętlę gry (Game Loop):** Opartą na korutynach, działającą z częstotliwością ~60 FPS.
+ * - **Silnik fizyczny:** Całkowanie ruchu piłki z obsługą tarcia i przyspieszenia z akcelerometru.
+ * Zastosowano technikę **sub-steppingu** (4 kroki na klatkę) dla precyzyjnej detekcji kolizji przy dużych prędkościach.
+ * - **Obsługę kolizji:**
+ * - Z pierścieniami (odbicia sprężyste).
+ * - Ze ścianami (ścianki przeszkód [WallObstacle]).
+ * - Z "lukami" (wyjścia z pierścieni).
+ * - **Mechanikę Czarnej Dziury:** Obiekt w centrum, który powiększa się w czasie. Jeśli gracz dotknie horyzontu zdarzeń - przegrywa.
+ * - **System Modyfikatorów (Buff/Debuff):**
+ * Przelatując przez luki, gracz może aktywować efekty zmieniające:
+ * - Punkty (mnożenie, dzielenie, dodawanie).
+ * - Czas (dodanie/odjęcie).
+ * - Strukturę poziomu (zwiększenie/zmniejszenie liczby ścian lub luk w kolejnych pierścieniach).
+ * - **Obsługę wstrząsu (Shake):**
+ * Wykrycie wstrząsu powoduje przetasowanie układu ścian w bieżącym pierścieniu, ale nakłada karę czasową.
+ *
+ * Renderowanie odbywa się na natywnym [Canvas] z zastosowaniem transformacji kamery (kamera śledzi gracza).
+ *
+ * @param shakeEvent Licznik zdarzeń wstrząsu (zmienia się przy wykryciu potrząśnięcia).
+ * @param hasWon Flaga stanu zwycięstwa.
+ * @param hasLost Flaga stanu porażki.
+ * @param remainingTime Pozostały czas w sekundach.
+ * @param onTimeChange Callback aktualizujący czas w nadrzędnym komponencie.
+ * @param onScoreChange Callback aktualizujący wynik.
+ * @param onWin Callback wywoływany przy zwycięstwie.
+ * @param onLost Callback wywoływany przy porażce.
+ */
 @Composable
 fun GameCanvas(
     shakeEvent: Int,
@@ -256,7 +328,7 @@ fun GameCanvas(
     var timeSinceLastRing by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var pendingPointModifier by remember { mutableFloatStateOf(0f) }
 
-    // ————— CZARNA DZIURA ————— //
+    // Parametry Czarnej Dziury
     val BLACK_HOLE_CENTER = Offset(600f, 800f)
     val INITIAL_RADIUS = 40f
     val GROWTH_RATE = 15f
@@ -275,7 +347,6 @@ fun GameCanvas(
     var wallMultiplier by remember { mutableFloatStateOf(1f) }
     var gapMultiplier by remember { mutableFloatStateOf(1f) }
 
-    // Inicjalizacja początkowych pierścieni
     LaunchedEffect(Unit) {
         if (rings.isEmpty()) {
             rings.add(RingObstacle(BLACK_HOLE_CENTER, 250f, 200f, obstacleColor, ringCount = 0))
@@ -285,14 +356,14 @@ fun GameCanvas(
         }
     }
 
-    // ================= SHAKE HANDLER =================
+    // Logika obsługi wstrząsu (Shake Handler)
     var lastHandledShake by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(shakeEvent) {
         if (shakeEvent <= lastHandledShake) return@LaunchedEffect
         lastHandledShake = shakeEvent
 
-        // ⏱️ KARA ZA WSTRZĄS
+        // Kara czasowa za użycie wstrząsu
         localTimer = (localTimer - 8).coerceAtLeast(0)
         withContext(Dispatchers.Main) {
             onTimeChange(localTimer)
@@ -304,7 +375,6 @@ fun GameCanvas(
             }
             return@LaunchedEffect
         }
-
 
         val dist = hypot(ballX - center.x, ballY - center.y)
         var ringIndex = -1
@@ -342,7 +412,7 @@ fun GameCanvas(
         )
     }
 
-    // TIMER
+    // Główny Timer odliczający czas gry
     LaunchedEffect(Unit) {
         while (!hasWon && !hasLost) {
             delay(1000)
@@ -351,11 +421,10 @@ fun GameCanvas(
 
             if (localTimer <= 0) {
                 withContext(Dispatchers.Main) { onLost() }
-                stopLoop = true // <-- zatrzymuje główny game loop
+                stopLoop = true
                 break
             }
         }
-
     }
 
     DisposableEffect(Unit) {
@@ -364,7 +433,7 @@ fun GameCanvas(
     }
     val gravityData by tiltSensor.gravityData.collectAsState()
 
-    // ———————— GAME LOOP ———————— //
+    // --- GŁÓWNA PĘTLA GRY (PHYSICS & GAME LOOP) ---
     LaunchedEffect(Unit) {
         var lastTime = System.currentTimeMillis()
         val physicsSteps = 4
@@ -385,7 +454,7 @@ fun GameCanvas(
             repeat(physicsSteps) { _ ->
                 val gravity = gravityData
 
-                // ————— CZARNA DZIURA ————— //
+                // Aktualizacja logiki Czarnej Dziury
                 if (bhDelay > 0f) {
                     bhDelay -= subDt
                 } else if (bhPause > 0f) {
@@ -404,7 +473,7 @@ fun GameCanvas(
                     bhRadius += currentGrowthRate * subDt
                 }
 
-                // Sprawdzenie przegranej przez dziurę
+                // Sprawdzenie kolizji z Czarną Dziurą
                 val distBH = hypot(ballX - BLACK_HOLE_CENTER.x, ballY - BLACK_HOLE_CENTER.y)
                 if (bhDelay <= 0f && distBH <= bhRadius + ballRadius) {
                     withContext(Dispatchers.Main) {
@@ -414,7 +483,7 @@ fun GameCanvas(
                     return@repeat
                 }
 
-                // ————— RUCH ————— //
+                // Fizyka ruchu kulki
                 val ax = -gravity.x * accelerationFactor
                 val ay = (gravity.y - CALIBRATION_OFFSET_Y) * accelerationFactor
                 velocityX = (velocityX + ax) * friction
@@ -429,7 +498,7 @@ fun GameCanvas(
                 ballX += velocityX * subDt * 60
                 ballY += velocityY * subDt * 60
 
-                // ————— KOLIZJE ————— //
+                // Detekcja i obsługa kolizji
                 if (rings.isNotEmpty()) {
                     val curFirst = BooleanArray(rings.size)
                     val curSecond = BooleanArray(rings.size)
@@ -441,7 +510,7 @@ fun GameCanvas(
                     }
 
                     var hitGap = false
-                    // Gap walls
+                    // Kolizje ze ściankami w lukach (Gap Walls)
                     for (i in rings.indices) {
                         val gapWalls = rings[i].generateGapWalls()
                         for (gw in gapWalls) {
@@ -459,7 +528,7 @@ fun GameCanvas(
                         }
                     }
 
-                    // Zwykłe ściany (Walls)
+                    // Kolizje ze zwykłymi ścianami przeszkód (Obstacle Walls)
                     for (w in walls) {
                         val info = getWallCollisionInfo(Offset(ballX, ballY), ballRadius, w)
                         if (info != null) {
@@ -481,7 +550,7 @@ fun GameCanvas(
                             val cur = curFirst[i] to curSecond[i]
                             val prev = if (i < prevStates.size) prevStates[i] else (false to false)
 
-                            // 1. Logika fizyki (Kolizja z pierścieniem) - bez zmian, działa poprawnie
+                            // Fizyka odbicia od głównego pierścienia
                             if (cur.first && !cur.second) {
                                 val dx = ballX - ring.center.x
                                 val dy = ballY - ring.center.y
@@ -501,8 +570,7 @@ fun GameCanvas(
                                 }
                             }
 
-                            // 2. Logika przejścia (SCORE I BUFFY)
-                            // Zmieniony warunek: prev.second (był w obrębie pierścienia) -> !cur.second (wyleciał poza)
+                            // Logika przejścia przez pierścień (Score, Buffs, Progression)
                             if (prev.second && !cur.second && !(isTriggered.getOrNull(i) ?: false)) {
                                 val angle = Math.toDegrees(atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble()))
                                     .let { if (it < 0) it + 360 else it }.toFloat()
@@ -511,10 +579,10 @@ fun GameCanvas(
 
                                 var pointEffectApplied = false
 
+                                // Aplikowanie efektów z luki (Buff/Debuff)
                                 effect?.let { g ->
                                     when (g.effect.type) {
                                         EffectType.POINTS -> {
-                                            // OBLICZANIE PUNKTÓW: Operujemy na Double dla precyzji, potem zaokrąglamy
                                             val currentBase = localHighScore.toDouble()
                                             val newScore = when (g.effect.operation) {
                                                 Operation.MULTIPLY -> currentBase * g.effect.value
@@ -524,7 +592,7 @@ fun GameCanvas(
                                                 Operation.SUB -> currentBase + g.effect.value
                                             }
                                             localHighScore = newScore.toInt().coerceAtLeast(0)
-                                            pointEffectApplied = true // Flaga: użyliśmy efektu z luki
+                                            pointEffectApplied = true
                                         }
                                         EffectType.TIME -> {
                                             localTimer = (localTimer + g.effect.value.toInt()).coerceAtLeast(0)
@@ -558,18 +626,17 @@ fun GameCanvas(
                                     }
                                 }
 
-                                // DODAWANIE PUNKTÓW ZA CZAS (Tylko jeśli nie było efektu punktowego w luce)
+                                // Bonus punktowy za szybkie przejście
                                 if (!pointEffectApplied) {
                                     val timeBonus = maxOf(0, 50 - ((System.currentTimeMillis() - timeSinceLastRing) / 1000f * 5).toInt())
                                     localHighScore += timeBonus
                                 }
 
-                                // Rejestrujemy przejście pierścienia
                                 if (i < isTriggered.size) isTriggered[i] = true
                                 ringCount++
                                 timeSinceLastRing = System.currentTimeMillis()
 
-                                // Dodawanie nowego pierścienia (logika zasięgu)
+                                // Proceduralne generowanie kolejnego pierścienia
                                 if (rings.size < maxRings) {
                                     val lastRing = rings.last()
                                     val newInner = lastRing.outerRadius + 200f
@@ -584,7 +651,6 @@ fun GameCanvas(
                                     }
                                 }
 
-                                // Synchronizacja UI
                                 withContext(Dispatchers.Main) {
                                     onScoreChange(localHighScore)
                                     onTimeChange(localTimer)
@@ -606,6 +672,7 @@ fun GameCanvas(
                 }
             }
 
+            // Warunek zwycięstwa (ukończenie wszystkich pierścieni)
             if (ringCount >= maxRings && !hasWon) {
                 localHighScore += localTimer * 5
 
@@ -622,23 +689,18 @@ fun GameCanvas(
         }
     }
 
-    // GENERATOR ŚCIAN
+    // Generator ścian między pierścieniami
     LaunchedEffect(rings.size) {
         if (rings.size > 1) {
-            val i = rings.size - 2 // indeks "bieżącego" pierścienia (ostatni dodany to size-1)
-            // Używamy tego samego algorytmu co przy wstrząsie, ale losowo
-            // Tu po prostu dodajemy nowe ściany dla NOWEGO poziomu
+            val i = rings.size - 2
             val current = rings[i]
             val next = rings[i+1]
 
-            // Sprawdźmy czy już są ściany między tymi pierścieniami (żeby nie dublować)
             val hasWalls = walls.any { it.startRing == current }
 
             if (!hasWalls) {
                 val radius = (current.innerRadius + current.outerRadius) / 2f
-
-                val baseWalls =
-                    (radius / 120f).roundToInt() + (10 * i)  // gęstość ~1 ściana / 120px
+                val baseWalls = (radius / 120f).roundToInt() + (10 * i)
 
                 val modWalls = calculateWallCount(
                     ringIndex = i,
@@ -647,9 +709,8 @@ fun GameCanvas(
                     wallMultiplier = wallMultiplier
                 )
 
-                // Używamy nowej bezpiecznej funkcji
                 val newWalls = generateWallsBetweenRings(
-                    listOf(current, next), // Przekazujemy tylko parę
+                    listOf(current, next),
                     modWalls,
                     obstacleColor
                 )

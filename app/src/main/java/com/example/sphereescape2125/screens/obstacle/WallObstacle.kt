@@ -4,13 +4,29 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.example.sphereescape2125.screens.obstacle.RingObstacle
-import com.example.sphereescape2125.screens.obstacle.gapSize // Importujemy gapSize z Obstacle.kt
 import kotlin.math.*
 import kotlin.random.Random
 
-// Używamy tej samej stałej co w Obstacle.kt lub definiujemy lokalnie dla pewności
+/**
+ * Stała określająca bezpieczną szerokość luki (w pikselach) dla celów kolizji ścian.
+ * Używana do obliczenia marginesu bezpieczeństwa, aby ściana nie została wygenerowana
+ * zbyt blisko krawędzi wyjścia z pierścienia.
+ */
 const val COLLISION_GAP_SIZE = 120f
 
+/**
+ * Struktura danych reprezentująca przeszkodę w formie ściany (promienia).
+ *
+ * Ściana jest odcinkiem łączącym dwa pierścienie (lub znajdującym się pomiędzy nimi),
+ * zdefiniowanym w układzie biegunowym (kąt i promienie graniczne).
+ *
+ * @property startRing Referencja do pierścienia wewnętrznego.
+ * @property endRing Referencja do pierścienia zewnętrznego.
+ * @property startRadius Promień początkowy ściany.
+ * @property endRadius Promień końcowy ściany.
+ * @property angle Kąt umieszczenia ściany (w stopniach, 0-360).
+ * @property color Kolor przeszkody.
+ */
 data class WallObstacle(
     val startRing: RingObstacle,
     val endRing: RingObstacle,
@@ -20,7 +36,18 @@ data class WallObstacle(
     val color: Color
 )
 
-// Sprawdza odległość kątową od innych ścian
+/**
+ * Sprawdza, czy proponowany kąt nowej ściany jest wystarczająco oddalony od istniejących ścian.
+ *
+ * Funkcja przelicza wymaganą odległość w pikselach na stopnie w oparciu o promień,
+ * zgodnie ze wzorem na długość łuku: $L = \theta \cdot r$.
+ *
+ * @param newAngle Kąt nowej ściany.
+ * @param used Lista zajętych już kątów.
+ * @param minPx Minimalny wymagany odstęp w pikselach.
+ * @param radius Promień, na którym dokonujemy sprawdzenia (zazwyczaj średni promień między pierścieniami).
+ * @return `true` jeśli kąt jest bezpieczny, `false` jeśli jest zbyt blisko innej ściany.
+ */
 fun anglesFarEnoughPx(newAngle: Float, used: List<Float>, minPx: Float, radius: Float): Boolean {
     val minDeg = (minPx / radius) * (180f / PI.toFloat())
     return used.all { existing ->
@@ -31,23 +58,26 @@ fun anglesFarEnoughPx(newAngle: Float, used: List<Float>, minPx: Float, radius: 
     }
 }
 
-// NOWA FUNKCJA: Sprawdza czy kąt nie wchodzi w dziurę (gap) pierścienia
+/**
+ * Weryfikuje, czy podany kąt nie koliduje z lukami (wyjściami) w pierścieniu.
+ *
+ * Zapobiega sytuacji, w której ściana zablokowałaby graczowi możliwość prześlizgnięcia się
+ * przez otwór w pierścieniu. Uwzględnia margines bezpieczeństwa oraz cykliczność kątów (360 -> 0).
+ *
+ * @param angle Kąt umieszczenia ściany.
+ * @param ring Pierścień, którego luki sprawdzamy.
+ * @return `true` jeśli kąt wchodzi w światło luki (jest zablokowany), w przeciwnym razie `false`.
+ */
 fun isAngleBlockedByGaps(angle: Float, ring: RingObstacle): Boolean {
-    // Margines bezpieczeństwa (np. 10 stopni), żeby ściana nie stykała się z krawędzią dziury
     val safetyMarginDeg = 8f
     val gapAngleWidth = (COLLISION_GAP_SIZE / ring.innerRadius) * (180f / PI.toFloat())
 
     for (gapStart in ring.gaps) {
-        // Obliczamy początek i koniec dziury
         var gStart = gapStart - safetyMarginDeg
         var gEnd = gapStart + gapAngleWidth + safetyMarginDeg
 
-        // Normalizacja kąta do 0-360 sprawdzania
-        // Najprościej: sprawdzić czy angle wpada w zakres, uwzględniając "przejście przez zero"
-
         val angleNorm = if (angle < 0) angle + 360f else angle % 360f
 
-        // Obsługa zawijania zakresu (np. gap od 350 do 10)
         val inGap = if (gEnd > 360f) {
             angleNorm >= gStart || angleNorm <= (gEnd - 360f)
         } else if (gStart < 0f) {
@@ -61,6 +91,17 @@ fun isAngleBlockedByGaps(angle: Float, ring: RingObstacle): Boolean {
     return false
 }
 
+/**
+ * Proceduralny generator ścian między zestawem pierścieni.
+ *
+ * Algorytm dzieli przestrzeń na sektory i próbuje wylosować pozycję ściany w każdym z nich.
+ * Generuje różne typy ścian (pełne połączenia lub częściowe wypustki) w sposób losowy.
+ *
+ * @param rings Lista pierścieni w grze.
+ * @param wallsPerGap Docelowa liczba ścian przypadająca na jeden sektor (gęstość).
+ * @param color Kolor generowanych ścian.
+ * @return Lista nowo utworzonych obiektów [WallObstacle].
+ */
 fun generateWallsBetweenRings(rings: List<RingObstacle>, wallsPerGap: Int, color: Color): List<WallObstacle> {
     val walls = mutableListOf<WallObstacle>()
     if (rings.size < 2) return walls
@@ -75,16 +116,11 @@ fun generateWallsBetweenRings(rings: List<RingObstacle>, wallsPerGap: Int, color
             val minAngle = (sectorSize * index)
             val maxAngle = minAngle + sectorSize
 
-            // Próbujemy wylosować poprawną ścianę 10 razy
             var attempt = 0
             var added = false
 
             while(attempt < 15 && !added) {
                 val baseAngle = Random.nextFloat() * (maxAngle - minAngle) + minAngle
-
-                // SPRAWDZENIE 1: Czy nie koliduje z innymi ścianami
-                // SPRAWDZENIE 2: Czy nie zasłania przejścia w obecnym pierścieniu
-                // SPRAWDZENIE 3: Czy nie zasłania przejścia w następnym pierścieniu
                 val avgR = (current.outerRadius + next.innerRadius) / 2f
 
                 if (anglesFarEnoughPx(baseAngle, usedAngles, 150f, avgR) &&
@@ -109,11 +145,25 @@ fun generateWallsBetweenRings(rings: List<RingObstacle>, wallsPerGap: Int, color
     return walls
 }
 
-// FUNKCJA DLA WSTRZĄSU (POPRAWIONA)
+/**
+ * Regeneruje ściany dla konkretnego poziomu (pomiędzy dwoma pierścieniami) w reakcji na wstrząs.
+ *
+ * Funkcja ta:
+ * 1. Usuwa stare ściany między pierścieniem `ringIndex` a `ringIndex + 1`.
+ * 2. Generuje nowy układ ścian.
+ * 3. Gwarantuje, że nowa ściana nie pojawi się w miejscu, gdzie aktualnie znajduje się gracz ([safeMargin]).
+ *
+ * @param ringIndex Indeks wewnętrznego pierścienia, dla którego następuje przetasowanie.
+ * @param rings Lista wszystkich pierścieni.
+ * @param walls Referencja do modyfikowalnej listy ścian (StateList).
+ * @param wallsPerGap Gęstość ścian.
+ * @param color Kolor nowych ścian.
+ * @param playerAngle Aktualny kąt położenia gracza (aby uniknąć spawnu na graczu).
+ */
 fun regenerateWallsForSpecificRing(
     ringIndex: Int,
     rings: List<RingObstacle>,
-    walls: MutableList<WallObstacle>, // Upewnij się, że to SnapshotStateList z GameScreen
+    walls: MutableList<WallObstacle>,
     wallsPerGap: Int,
     color: Color,
     playerAngle: Float
@@ -123,8 +173,6 @@ fun regenerateWallsForSpecificRing(
     val current = rings[ringIndex]
     val next = rings[ringIndex + 1]
 
-    // USUNIĘCIE: Czyścimy ściany powiązane z tymi konkretnymi pierścieniami
-    // Używamy iteratora, aby bezpiecznie modyfikować listę podczas pętli
     val iterator = walls.iterator()
     while (iterator.hasNext()) {
         val w = iterator.next()
@@ -133,7 +181,6 @@ fun regenerateWallsForSpecificRing(
         }
     }
 
-    // GENEROWANIE NOWYCH:
     val sectorSize = 360f / wallsPerGap
     val usedAngles = mutableListOf<Float>()
     val safeMargin = 40f
@@ -169,6 +216,14 @@ fun regenerateWallsForSpecificRing(
     }
 }
 
+/**
+ * Rysuje listę ścian na Canvasie.
+ *
+ * Konwertuje współrzędne biegunowe (kąt i promień) ścian na współrzędne kartezjańskie (X, Y)
+ * wymagane przez funkcję [DrawScope.drawLine].
+ *
+ * @param walls Lista ścian do narysowania.
+ */
 fun DrawScope.drawWalls(walls: List<WallObstacle>) {
     val visualOffset = -8f
     for (wall in walls) {

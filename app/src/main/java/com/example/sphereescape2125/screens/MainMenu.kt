@@ -1,7 +1,6 @@
 package com.example.sphereescape2125.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,7 +18,20 @@ import com.example.sphereescape2125.components.GlassButton
 import com.example.sphereescape2125.components.PlayGlassBallButton
 import com.example.sphereescape2125.ui.theme.AnimatedParticleBackground
 
-
+/**
+ * Ekran menu głównego gry.
+ *
+ * Stanowi centralny punkt nawigacji, umożliwiając rozpoczęcie rozgrywki,
+ * przegląd statystyk, zmianę ustawień lub wyjście z aplikacji.
+ *
+ * Wizualnie komponuje dynamiczne tło cząsteczkowe [AnimatedParticleBackground]
+ * z interfejsem w stylu "Glassmorphism". Kolorystyka tytułu adaptuje się
+ * automatycznie do jasności tła (motyw jasny/ciemny), zapewniając optymalny kontrast.
+ *
+ * @param onPlay Funkcja wywoływana po naciśnięciu głównego przycisku startu (szklana kula).
+ * @param onOptions Funkcja nawigująca do ekranu opcji.
+ * @param onStats Funkcja nawigująca do ekranu statystyk.
+ */
 @Composable
 fun MainMenu(
     onPlay: () -> Unit,
@@ -28,43 +40,32 @@ fun MainMenu(
 ) {
     val activity = LocalContext.current as? ComponentActivity
 
-
-    // --- LOGIKA KOLORÓW DLA TYTUŁU ---
-    // Sprawdzamy jasność tła (z motywu sterowanego czujnikiem)
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    // Wybieramy kolor tytułu:
-    // Ciemny -> Cyan (jak było)
-    // Jasny -> 0xFFFF1744 (ta sama czerwień co w kulce)
     val titleColor = if (isDark) {
         Color.Cyan.copy(alpha = 0.8f)
     } else {
-        Color(0xFFFF1744).copy(alpha = 0.9f) // Lekko większe alpha dla czerwonego, żeby był wyraźny
+        Color(0xFFFF1744).copy(alpha = 0.9f)
     }
 
-    // Główny kontener (Box pozwala nakładać elementy na siebie - tło pod spodem)
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // 1. WARSTWA TŁA: Cząsteczki (z pliku Particles.kt)
-
         AnimatedParticleBackground(modifier = Modifier.fillMaxSize())
 
-        // 2. WARSTWA TREŚCI: Napisy i przyciski
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(24.dp)
         ) {
-            // TYTUŁ GRY
             Text(
                 text = "SPHERE ESCAPE",
                 color = titleColor,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 2.sp,
-                style = androidx.compose.material3.MaterialTheme.typography.headlineLarge.copy(
+                style = MaterialTheme.typography.headlineLarge.copy(
                     shadow = Shadow(
                         color = Color.Black,
                         offset = Offset(4f, 4f),
@@ -75,15 +76,13 @@ fun MainMenu(
 
             Spacer(modifier = Modifier.height(60.dp))
 
-            // SZKLANA KULKA "GRAJ"
             PlayGlassBallButton(
                 onClick = onPlay,
-                modifier = Modifier.size(160.dp) // Rozmiar kulki w menu
+                modifier = Modifier.size(160.dp)
             )
 
             Spacer(modifier = Modifier.height(60.dp))
 
-            // LISTA PRZYCISKÓW
             GlassButton(text = "Statystyki", onClick = onStats)
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -94,4 +93,3 @@ fun MainMenu(
         }
     }
 }
-

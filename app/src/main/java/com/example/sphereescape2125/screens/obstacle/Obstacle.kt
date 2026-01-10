@@ -10,55 +10,123 @@ import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.random.Random
-import kotlin.math.abs
 import kotlin.math.sqrt
-import kotlin.math.min
 
-// NOWA KLASA DLA ŚCIANEK PRZERW
+/**
+ * Reprezentuje fizyczną ścianę boczną wewnątrz luki (przerwy) w pierścieniu.
+ *
+ * Służy do obsługi kolizji, gdy gracz uderzy w bok otwarcia pierścienia.
+ * Wektor normalny jest kluczowy do obliczenia kierunku odbicia piłki.
+ *
+ * @property start Punkt początkowy odcinka ściany (od strony wewnętrznej pierścienia).
+ * @property end Punkt końcowy odcinka ściany (od strony zewnętrznej pierścienia).
+ * @property normal Znormalizowany wektor prostopadły do ściany, wskazujący "wnętrze" przeszkody (kierunek odbicia).
+ */
 data class GapWall(
     val start: Offset,
     val end: Offset,
     val normal: Offset
 )
 
+
+
+/**
+ * Typ efektu (modyfikatora), jaki gracz może otrzymać przelatując przez lukę.
+ */
 enum class EffectType {
-    WALLS,      // liczba ścian
-    GAPS,       // liczba przerw
-    TIME,       // czas
-    POINTS      // punkty
+    /** Modyfikuje liczbę ścian w następnych pierścieniach. */
+    WALLS,
+    /** Modyfikuje liczbę przerw (wyjść) w następnych pierścieniach. */
+    GAPS,
+    /** Dodaje lub odejmuje czas gry. */
+    TIME,
+    /** Modyfikuje wynik punktowy. */
+    POINTS
 }
 
+/**
+ * Operacja matematyczna wykonywana przez efekt.
+ */
 enum class Operation { ADD, SUB, MULTIPLY, DIVIDE }
 
-// Funkcja generująca losowy efekt, skalowany względem aktualnego numeru pierścienia
+/**
+ * Stała szerokość luki w pikselach, używana do obliczeń geometrycznych.
+ */
+const val gapSize = 120f
+
+/**
+ * Model danych pojedynczego efektu (Buff/Debuff).
+ *
+ * @property operation Rodzaj operacji (np. mnożenie punktów, dodawanie czasu).
+ * @property value Wartość liczbowa efektu.
+ * @property label Etykieta tekstowa wyświetlana w grze (np. "⭐ x2").
+ * @property type Kategoria efektu.
+ */
+data class RingEffect(
+    val operation: Operation,
+    val value: Float,
+    val label: String,
+    val type: EffectType
+)
+
+/**
+ * Struktura wiążąca efekt z konkretną luką w pierścieniu.
+ *
+ * @property startAngle Kąt początkowy luki.
+ * @property endAngle Kąt końcowy luki.
+ * @property effect Efekt przypisany do tej luki.
+ * @property midAngle Kąt środkowy luki (używany do pozycjonowania tekstu).
+ */
+data class GapWithEffect(
+    val startAngle: Float,
+    val endAngle: Float,
+    val effect: RingEffect
+) {
+    val midAngle: Float
+        get() = (startAngle + endAngle) / 2f
+}
+
+/**
+ * Generuje losowy efekt (Buff lub Debuff) skalowany poziomem trudności.
+ *
+ * Algorytm:
+ * 1. Losuje typ efektu.
+ * 2. Określa czy efekt jest mnożnikiem (20% szans) czy modyfikatorem addytywnym.
+ * 3. Określa czy jest to Debuff (70% szans) czy Buff (30% szans).
+ * 4. Skaluje siłę efektu używając pierwiastka z numeru pierścienia ([ringCount]),
+ * dzięki czemu gra staje się trudniejsza (lub bardziej ryzykowna) z czasem.
+ *
+ * @param ringCount Numer aktualnego pierścienia (poziom trudności).
+ * @return Wygenerowany obiekt [RingEffect].
+ */
 fun generateRandomEffect(ringCount: Int): RingEffect {
     val effectType = EffectType.entries.random()
-    // 20% szansy na mnożenie/dzielenie dla WALLS, GAPS, POINTS
     val isMultiplier = Random.nextFloat() < 0.2f && effectType != EffectType.TIME
-    val isDebuff = Random.nextFloat() < 0.7f     // 70% debuff / 30% buff
+    val isDebuff = Random.nextFloat() < 0.7f
 
-    // DYNAMICZNE SKALOWANIE: Wartość max Add/Sub rośnie pierwiastkowo z ringCount
+    // Skalowanie trudności: Im dalej, tym większe wartości dodawania/odejmowania
     val maxAddSub = 3 + (sqrt(ringCount.toFloat())).toInt().coerceAtMost(5)
 
     val value = when (effectType) {
         EffectType.WALLS, EffectType.GAPS ->
             if (isMultiplier) {
-                Random.nextInt(2, 4).toFloat() // x2 lub x3
+                Random.nextInt(2, 4).toFloat()
             } else {
-                Random.nextInt(1, maxAddSub + 1).toFloat() // +1 do maxAddSub
+                Random.nextInt(1, maxAddSub + 1).toFloat()
             }
-        EffectType.TIME -> Random.nextInt(2, 6).toFloat() // Tylko ADD/SUB
+        EffectType.TIME -> Random.nextInt(2, 6).toFloat()
         EffectType.POINTS ->
             if (isMultiplier) {
-                Random.nextInt(2, 4).toFloat() // x2 lub x3
+                Random.nextInt(2, 4).toFloat()
             } else {
                 Random.nextInt(5, 21).toFloat()
             }
     }
 
+    // Logika mapowania operacji na Buff/Debuff w zależności od typu
     val op = when (effectType) {
         EffectType.WALLS -> {
-            // WALLS: ADD/MUL to DEBUFF, SUB/DIV to BUFF
+            // Dla ścian: Mnożenie/Dodawanie to utrudnienie (Debuff)
             if (isMultiplier) {
                 if (isDebuff) Operation.MULTIPLY else Operation.DIVIDE
             } else {
@@ -66,7 +134,7 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
             }
         }
         EffectType.GAPS -> {
-            // GAPS: SUB/DIV to DEBUFF, ADD/MUL to BUFF
+            // Dla przerw: Dzielenie/Odejmowanie to utrudnienie (mniej wyjść)
             if (isMultiplier) {
                 if (isDebuff) Operation.DIVIDE else Operation.MULTIPLY
             } else {
@@ -74,7 +142,7 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
             }
         }
         EffectType.POINTS, EffectType.TIME -> {
-            // POINTS/TIME: SUB/DIV to DEBUFF, ADD/MUL to BUFF
+            // Dla punktów/czasu: Dzielenie/Odejmowanie to kara
             if (isMultiplier) {
                 if (isDebuff) Operation.DIVIDE else Operation.MULTIPLY
             } else {
@@ -83,7 +151,6 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
         }
     }
 
-    // finalValue: Dla SUB musi być ujemne.
     val finalValue = if (op == Operation.SUB) -value else value
 
     val icon = when(effectType) {
@@ -100,42 +167,35 @@ fun generateRandomEffect(ringCount: Int): RingEffect {
         Operation.DIVIDE -> "÷${value.toInt()}"
     }
 
-    val label = "$icon $effectLabel"
-
     return RingEffect(
         operation = op,
         value = finalValue,
-        label = label,
+        label = "$icon $effectLabel",
         type = effectType
     )
 }
 
-const val gapSize = 120f
-
-data class RingEffect(
-    val operation: Operation,
-    val value: Float,
-    val label: String,
-    val type: EffectType
-)
-
-data class GapWithEffect(
-    val startAngle: Float,
-    val endAngle: Float,
-    val effect: RingEffect
-) {
-    val midAngle: Float
-        get() = (startAngle + endAngle) / 2f
-}
-
-
+/**
+ * Główna klasa reprezentująca przeszkodę w postaci pierścienia.
+ *
+ * Odpowiada za:
+ * 1. Przechowywanie geometrii (promienie, środek).
+ * 2. Generowanie losowych luk (wyjść) w momencie inicjalizacji.
+ * 3. Przypisywanie losowych efektów do każdej luki.
+ *
+ * @param center Środek pierścienia.
+ * @param outerRadius Promień zewnętrzny.
+ * @param innerRadius Promień wewnętrzny.
+ * @param color Kolor pierścienia.
+ * @param ringCount Numer porządkowy pierścienia (wpływa na trudność efektów).
+ */
 data class RingObstacle(
     val center: Offset,
     val outerRadius: Float,
     val innerRadius: Float,
     val color: Color = Color.Red,
     var wallsGenerated: Boolean = false,
-    val ringCount: Int // ZMIANA: Dodany ringCount do skalowania
+    val ringCount: Int
 ) {
     var totalExits: Int = 0
     var gaps: MutableList<Float> = mutableListOf()
@@ -143,6 +203,7 @@ data class RingObstacle(
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
 
     init {
+        // Obliczanie maksymalnej liczby wyjść w zależności od obwodu
         totalExits = (floor(((PI.toFloat() * innerRadius) / gapSize) / 6)).toInt() + 2
 
         for (i in 0 until totalExits) {
@@ -160,17 +221,26 @@ data class RingObstacle(
             val gapStart = randomAngle
             val gapEnd = (gapStart + gapAngle) % 360f
 
-            // ZMIANA: Użycie skalowanej funkcji
             val effect = generateRandomEffect(ringCount)
 
-            // ZMIANA: Poprawka - usuń duplikat z poprzedniej wersji
             gapEffects.add(GapWithEffect(startAngle = gapStart, endAngle = gapEnd, effect = effect))
             gaps.add(gapStart)
         }
     }
 }
 
-// ZMIANA: Funkcja do generowania bocznych ścian przerw
+/**
+ * Oblicza geometrię ścian bocznych dla wszystkich luk w pierścieniu.
+ *
+ * Dla każdej luki generowane są dwa odcinki (ściany):
+ * 1. Na początku luki (kąt startowy).
+ * 2. Na końcu luki (kąt końcowy).
+ *
+ * Obliczane są również wektory normalne, które muszą "odpychać" gracza do wnętrza pierścienia,
+ * a nie do wnętrza luki.
+ *
+ * @return Lista obiektów [GapWall] gotowa do detekcji kolizji.
+ */
 fun RingObstacle.generateGapWalls(): List<GapWall> {
     val walls = mutableListOf<GapWall>()
     val gapAngle = (gapSize / innerRadius) * (180f / PI.toFloat())
@@ -178,7 +248,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
     for (gapStart in gaps) {
         val gapEnd = (gapStart + gapAngle) % 360f
 
-        // --- ŚCIANA 1: Na początku przerwy ---
+        // Ściana 1 (Początek luki)
         val startRad = Math.toRadians(gapStart.toDouble())
         val innerStart = Offset(
             center.x + innerRadius * cos(startRad).toFloat(),
@@ -192,12 +262,11 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
         val dx1 = outerStart.x - innerStart.x
         val dy1 = outerStart.y - innerStart.y
         val len1 = kotlin.math.hypot(dx1, dy1)
-        val normal1 = if (len1 != 0f) Offset(-dy1/len1, dx1/len1) else Offset.Zero // Normalna wpycha w pierścień
+        val normal1 = if (len1 != 0f) Offset(-dy1/len1, dx1/len1) else Offset.Zero
 
         walls.add(GapWall(innerStart, outerStart, normal1))
 
-
-        // --- ŚCIANA 2: Na końcu przerwy ---
+        // Ściana 2 (Koniec luki)
         val endRad = Math.toRadians(gapEnd.toDouble())
         val innerEnd = Offset(
             center.x + innerRadius * cos(endRad).toFloat(),
@@ -211,7 +280,7 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
         val dx2 = outerEnd.x - innerEnd.x
         val dy2 = outerEnd.y - innerEnd.y
         val len2 = kotlin.math.hypot(dx2, dy2)
-        val normal2 = if (len2 != 0f) Offset(dy2/len2, -dx2/len2) else Offset.Zero // Normalna wpycha w pierścień
+        val normal2 = if (len2 != 0f) Offset(dy2/len2, -dx2/len2) else Offset.Zero
 
         walls.add(GapWall(innerEnd, outerEnd, normal2))
     }
@@ -219,14 +288,27 @@ fun RingObstacle.generateGapWalls(): List<GapWall> {
     return walls
 }
 
+
+
+/**
+ * Funkcja rysująca pierścień wraz z przerwami i etykietami efektów.
+ *
+ * Rysowanie odbywa się poprzez składanie łuków ([drawArc]) w miejscach, gdzie NIE ma przerw.
+ * Dodatkowo funkcja wykorzystuje natywny Canvas Androida do narysowania obróconego tekstu
+ * z etykietą efektu dokładnie w środku luki.
+ *
+ * @param obstacle Obiekt pierścienia do narysowania.
+ */
 fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
-    val visualOffset = 20f // ZMIANA: Dodano offset wizualny dla pierścienia
+    // Offset wizualny, aby collider był nieco "głębiej" niż grafika (lepsze odczucie gry)
+    val visualOffset = 20f
     val visualOuterRadius = obstacle.outerRadius - visualOffset
     val visualInnerRadius = obstacle.innerRadius - visualOffset
     val strokeWidth = visualOuterRadius - visualInnerRadius
     val totalAngles = mutableListOf<Pair<Float, Float>>()
     val gapAngle = (gapSize / obstacle.innerRadius) * (180f / PI.toFloat())
 
+    // 1. Przygotowanie listy kątów, gdzie są dziury
     for (gap in obstacle.gaps) {
         val gapStart = gap
         var gapEnd = (gapStart + gapAngle) % 360f
@@ -234,9 +316,9 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
         totalAngles.add(gapStart to gapEnd)
     }
 
+    // 2. Odwrócenie logiki: Obliczenie kątów, gdzie JEST ściana (wypełnienie)
     val filledAngles = mutableListOf<Pair<Float, Float>>()
     var currentStartAngle = 0f
-
     val sortedGaps = totalAngles.sortedBy { it.first }
 
     for ((startAngle, endAngle) in sortedGaps) {
@@ -245,25 +327,24 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
         }
         currentStartAngle = endAngle
     }
-
     if (currentStartAngle < 360f) {
         filledAngles.add(currentStartAngle to 360f)
     }
 
+    // 3. Rysowanie łuków
     for ((startAngle, endAngle) in filledAngles) {
         drawArc(
             color = obstacle.color,
             startAngle = startAngle,
             sweepAngle = endAngle - startAngle,
             useCenter = false,
-            // Użycie visualOuterRadius do określenia rozmiaru i pozycji
             topLeft = Offset(obstacle.center.x - visualOuterRadius, obstacle.center.y - visualOuterRadius),
             size = androidx.compose.ui.geometry.Size(visualOuterRadius * 2, visualOuterRadius * 2),
             style = Stroke(width = strokeWidth)
         )
     }
 
-    // WIZUALNA KOREKTA PRZESUNIĘCIA TEKSTU
+    // 4. Rysowanie tekstów efektów w lukach
     for (g in obstacle.gapEffects) {
         val midAngleDeg = g.midAngle
         val textRadius = (visualInnerRadius + visualOuterRadius) / 2f
@@ -278,11 +359,12 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
             isAntiAlias = true
         }
 
-        val Y_OFFSET_CORRECTION = -5f // Przesunięcie tekstu o 5px do góry (w stronę środka luki)
+        val Y_OFFSET_CORRECTION = -5f
 
         drawContext.canvas.nativeCanvas.apply {
             save()
             translate(textX, textY)
+            // Obrót tekstu tak, aby był prostopadły do promienia (czytelny dla gracza)
             rotate(midAngleDeg + 90f)
             val yCentered = - (paint.descent() + paint.ascent()) / 2f
 
