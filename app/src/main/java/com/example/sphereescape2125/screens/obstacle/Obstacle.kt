@@ -29,6 +29,15 @@ data class GapWall(
 )
 
 
+data class VisualEffect(
+    val text: String,
+    val color: Color,
+    var x: Float,
+    var y: Float,
+    var alpha: Float = 1f,
+    var lifetime: Int = 45 // ok. 0.75 sekundy przy 60 FPS
+)
+
 
 /**
  * Typ efektu (modyfikatora), jaki gracz może otrzymać przelatując przez lukę.
@@ -352,11 +361,19 @@ fun DrawScope.drawRingWithGaps(obstacle: RingObstacle) {
         val textX = obstacle.center.x + (textRadius * cos(textAngleRad)).toFloat()
         val textY = obstacle.center.y + (textRadius * sin(textAngleRad)).toFloat()
 
+        // POBIERZ KOLOR Z MOTYWU (Ciemny w Light Mode, Biały w Dark Mode)
+        val themeTextColor = android.graphics.Color.parseColor(
+            if (obstacle.color == Color.Red) "#FFFFFF" else "#1A1C1E"
+        )
+
         val paint = android.graphics.Paint().apply {
             textAlign = android.graphics.Paint.Align.CENTER
-            textSize = 40f
+            textSize = 45f
             color = android.graphics.Color.WHITE
             isAntiAlias = true
+            isFakeBoldText = true
+            // ...ALE DODAJEMY MOCNY CIEŃ, który uratuje widoczność w Light Mode
+            setShadowLayer(10f, 0f, 0f, android.graphics.Color.BLACK)
         }
 
         val Y_OFFSET_CORRECTION = -5f

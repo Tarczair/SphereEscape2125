@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -45,8 +47,8 @@ fun GameOverScreen(onBack: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("KONIEC GRY", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.error)
-        Text("Skończył się czas / Wpadłeś w Czarną Dziurę!", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
+        Text("KONIEC GRY", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onBackground)
+        Text("Skończył się czas / Wpadłeś w Czarną Dziurę!", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         Spacer(Modifier.height(24.dp))
         Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
             Text("WRÓĆ DO MENU")
@@ -89,14 +91,17 @@ fun AndroidKeepScreenOn() {
 fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     AndroidKeepScreenOn()
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("SphereEscapePrefs", Context.MODE_PRIVATE) }
+
+    val shockSens = prefs.getFloat("ShockSens", 1.0f)
 
     var shakeEvent by remember { mutableIntStateOf(0) }
-
     val shakeOffsetX = remember { Animatable(0f) }
     val shakeOffsetY = remember { Animatable(0f) }
 
+    // Inicjalizacja detektora z uwzględnieniem progu (używając nowej wersji klasy ShakeDetector)
     val shakeDetector = remember {
-        ShakeDetector(context) {
+        ShakeDetector(context, threshold = 4.5f - shockSens) {
             shakeEvent++
         }
     }
@@ -119,7 +124,6 @@ fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
     }
 
-    val prefs = remember { context.getSharedPreferences("SphereEscapePrefs", Context.MODE_PRIVATE) }
     var bestScore by remember { mutableIntStateOf(prefs.getInt("HighScore", 100)) }
 
     var currentScore by remember { mutableIntStateOf(0) }
@@ -179,6 +183,8 @@ fun GameScreen(viewModel: MainViewModel, onBack: () -> Unit) {
  */
 @Composable
 fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
+    val textColor = MaterialTheme.colorScheme.onBackground
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -191,7 +197,7 @@ fun GameHUD(timeLeft: Int, currentScore: Int, onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            Text("WYNIK: $currentScore", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em), modifier = Modifier.padding(top = 8.dp))
+            Text("WYNIK: $currentScore", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 6.em), color = textColor, modifier = Modifier.padding(top = 8.dp))
 
             val timeColor = if(timeLeft < 10) Color.Red else MaterialTheme.colorScheme.onBackground
             Text(
@@ -249,9 +255,14 @@ fun calculateWallCount(
     wallMultiplier: Float
 ): Int {
     val radius = (ring.innerRadius + ring.outerRadius) / 2f
-    val baseWalls = (radius / 120f).roundToInt() + (10 * ringIndex)
 
-    return ((baseWalls + wallCountModifier) * wallMultiplier)
+    // Zwiększamy bazę: np. (5 * ringIndex) zamiast poprzedniej logiki
+    // Dodatkowo dodajemy mnożnik trudności zależny od etapu
+    val difficultyFactor = 1.5f // Możesz tu wstawić np. 1.0f + (ringIndex * 0.1f)
+
+    val baseWalls = (radius / 100f).roundToInt() + (12 * ringIndex)
+
+    return (((baseWalls + wallCountModifier) * wallMultiplier) * difficultyFactor)
         .roundToInt()
         .coerceAtLeast(1)
 }
@@ -301,6 +312,8 @@ fun GameCanvas(
     val maxRings = 15
     var stopLoop = false
 
+    val visualEffects = remember { mutableStateListOf<VisualEffect>() }
+
     val rings = remember { mutableStateListOf<RingObstacle>() }
     val walls = remember { mutableStateListOf<WallObstacle>() }
     val prevStates = remember { mutableStateListOf<Pair<Boolean, Boolean>>() }
@@ -317,7 +330,6 @@ fun GameCanvas(
     var velocityX by remember { mutableFloatStateOf(0f) }
     var velocityY by remember { mutableFloatStateOf(0f) }
 
-    val accelerationFactor = 0.1f
     val friction = 0.92f
     val maxSpeed = 10f
     val CALIBRATION_OFFSET_Y = 4f
@@ -326,7 +338,8 @@ fun GameCanvas(
     var localTimer by remember { mutableIntStateOf(remainingTime) }
     var localHighScore by remember { mutableIntStateOf(0) }
     var timeSinceLastRing by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var pendingPointModifier by remember { mutableFloatStateOf(0f) }
+
+    val context = LocalContext.current
 
     // Parametry Czarnej Dziury
     val BLACK_HOLE_CENTER = Offset(600f, 800f)
@@ -338,7 +351,6 @@ fun GameCanvas(
     var bhDelay by remember { mutableFloatStateOf(START_DELAY) }
     var bhPause by remember { mutableFloatStateOf(0f) }
 
-    val context = LocalContext.current
     val tiltSensor = remember { TiltSensor(context) }
 
     var wallCountModifier by remember { mutableIntStateOf(0) }
@@ -346,6 +358,11 @@ fun GameCanvas(
 
     var wallMultiplier by remember { mutableFloatStateOf(1f) }
     var gapMultiplier by remember { mutableFloatStateOf(1f) }
+
+    val prefs = remember { context.getSharedPreferences("SphereEscapePrefs", Context.MODE_PRIVATE) }
+    // Pobieramy czułość (używamy klucza "BallSpeed" tak jak w Twoim sliderze)
+    val controlSensitivity = prefs.getFloat("BallSpeed", 1.0f)
+
 
     LaunchedEffect(Unit) {
         if (rings.isEmpty()) {
@@ -449,6 +466,15 @@ fun GameCanvas(
 
             if (hasWon || hasLost) break@loop
 
+            val iterator = visualEffects.iterator()
+            while (iterator.hasNext()) {
+                val ev = iterator.next()
+                ev.y -= 1.5f       // Ruch w górę
+                ev.alpha -= 0.02f  // Znikanie
+                ev.lifetime--
+                if (ev.lifetime <= 0) iterator.remove()
+            }
+
             val subDt = dt / physicsSteps
 
             repeat(physicsSteps) { _ ->
@@ -484,8 +510,9 @@ fun GameCanvas(
                 }
 
                 // Fizyka ruchu kulki
-                val ax = -gravity.x * accelerationFactor
-                val ay = (gravity.y - CALIBRATION_OFFSET_Y) * accelerationFactor
+                val ax = -gravity.x * controlSensitivity
+                val ay = (gravity.y - CALIBRATION_OFFSET_Y) * controlSensitivity
+
                 velocityX = (velocityX + ax) * friction
                 velocityY = (velocityY + ay) * friction
 
@@ -502,7 +529,6 @@ fun GameCanvas(
                 if (rings.isNotEmpty()) {
                     val curFirst = BooleanArray(rings.size)
                     val curSecond = BooleanArray(rings.size)
-
                     for (i in rings.indices) {
                         val coll = isCircleCollidingWithRing(Offset(ballX, ballY), ballRadius, rings[i])
                         curFirst[i] = coll.first
@@ -548,9 +574,7 @@ fun GameCanvas(
                         for (i in rings.indices) {
                             val ring = rings[i]
                             val cur = curFirst[i] to curSecond[i]
-                            val prev = if (i < prevStates.size) prevStates[i] else (false to false)
 
-                            // Fizyka odbicia od głównego pierścienia
                             if (cur.first && !cur.second) {
                                 val dx = ballX - ring.center.x
                                 val dy = ballY - ring.center.y
@@ -569,107 +593,152 @@ fun GameCanvas(
                                     if (dot < 0f) { velocityX -= dot * nx; velocityY -= dot * ny }
                                 }
                             }
+                        }
+                    }
 
-                            // Logika przejścia przez pierścień (Score, Buffs, Progression)
-                            if (prev.second && !cur.second && !(isTriggered.getOrNull(i) ?: false)) {
-                                val angle = Math.toDegrees(atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble()))
-                                    .let { if (it < 0) it + 360 else it }.toFloat()
+                    // 3. NOWA LOGIKA PUNKTÓW I PRZEJŚĆ (Niezależna od fizyki)
+                    for (i in rings.indices) {
+                        val ring = rings[i]
+                        val dist = hypot(ballX - ring.center.x, ballY - ring.center.y)
 
-                                val effect = ring.gapEffects.minByOrNull { g -> abs(g.midAngle - angle) }
+                        // Sprawdzamy czy środek kulki wszedł w obszar obręczy
+                        val isInside = dist > ring.innerRadius && dist < ring.outerRadius
+                        val wasTriggered = isTriggered.getOrNull(i) ?: false
 
-                                var pointEffectApplied = false
+                        if (isInside && !wasTriggered) {
+                            isTriggered[i] = true // Blokada, aby efekt odpalił się tylko raz
 
-                                // Aplikowanie efektów z luki (Buff/Debuff)
-                                effect?.let { g ->
-                                    when (g.effect.type) {
-                                        EffectType.POINTS -> {
-                                            val currentBase = localHighScore.toDouble()
-                                            val newScore = when (g.effect.operation) {
-                                                Operation.MULTIPLY -> currentBase * g.effect.value
-                                                Operation.DIVIDE ->
-                                                    if (g.effect.value != 0f) currentBase / g.effect.value else currentBase
-                                                Operation.ADD -> currentBase + g.effect.value
-                                                Operation.SUB -> currentBase + g.effect.value
-                                            }
-                                            localHighScore = newScore.toInt().coerceAtLeast(0)
-                                            pointEffectApplied = true
-                                        }
-                                        EffectType.TIME -> {
-                                            localTimer = (localTimer + g.effect.value.toInt()).coerceAtLeast(0)
-                                            if (g.effect.value > 0) bhPause += g.effect.value
-                                        }
-                                        EffectType.WALLS -> {
-                                            when (g.effect.operation) {
-                                                Operation.ADD, Operation.SUB -> {
-                                                    wallCountModifier =
-                                                        (wallCountModifier + g.effect.value.toInt())
-                                                }
-                                                Operation.MULTIPLY, Operation.DIVIDE -> {
-                                                    wallMultiplier *= g.effect.value
-                                                    wallMultiplier = wallMultiplier.coerceIn(0.25f, 3f)
-                                                }
-                                            }
-                                        }
+                            val angle = Math.toDegrees(atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble()))
+                                .let { if (it < 0) it + 360 else it }.toFloat()
 
-                                        EffectType.GAPS -> {
-                                            when (g.effect.operation) {
-                                                Operation.ADD, Operation.SUB -> {
-                                                    gapCountModifier =
-                                                        (gapCountModifier + g.effect.value.toInt())
-                                                }
-                                                Operation.MULTIPLY, Operation.DIVIDE -> {
-                                                    gapMultiplier *= g.effect.value
-                                                    gapMultiplier = gapMultiplier.coerceIn(0.25f, 3f)
-                                                }
-                                            }
-                                        }
+                            // Znalezienie najbliższego efektu w luce
+                            val effect = ring.gapEffects.minByOrNull { g -> abs(g.midAngle - angle) }
+                            var pointEffectApplied = false
+
+                            effect?.let { g ->
+                                // --- LOGIKA POWIADOMIENIA (Z TWOJEGO WKLEJONEGO KODU) ---
+                                val isPositive = when (g.effect.type) {
+                                    EffectType.POINTS -> g.effect.operation != Operation.SUB && g.effect.operation != Operation.DIVIDE
+                                    EffectType.TIME -> g.effect.value > 0
+                                    EffectType.WALLS -> g.effect.value < 0
+                                    EffectType.GAPS -> g.effect.value > 0
+                                }
+
+                                val valueAbs = if (g.effect.value < 0) -g.effect.value else g.effect.value
+                                val valueInt = valueAbs.toInt()
+
+                                val operator = when (g.effect.operation) {
+                                    Operation.MULTIPLY -> "x"
+                                    Operation.DIVIDE -> "/"
+                                    Operation.ADD -> "+"
+                                    else -> if (g.effect.value < 0) "-" else "+"
+                                }
+
+                                val message = when (g.effect.type) {
+                                    EffectType.POINTS -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) "PUNKTY $operator$valueInt!"
+                                        else if (isPositive) "ZDOBYTO $valueInt PKT!" else "UTRACONO $valueInt PKT!"
+                                    }
+                                    EffectType.TIME -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) "$operator$valueInt CZASU"
+                                        else "$operator$valueInt SEK"
+                                    }
+                                    EffectType.WALLS -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) "ŚCIANY $operator$valueAbs"
+                                        else if (isPositive) "MNIEJ ŚCIAN ($valueInt)" else "WIĘCEJ ŚCIAN ($valueInt)"
+                                    }
+                                    EffectType.GAPS -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) "WYJŚCIA $operator$valueAbs"
+                                        else if (isPositive) "+$valueInt WYJŚCIA" else "-$valueInt WYJŚCIA"
                                     }
                                 }
 
-                                // Bonus punktowy za szybkie przejście
-                                if (!pointEffectApplied) {
-                                    val timeBonus = maxOf(0, 50 - ((System.currentTimeMillis() - timeSinceLastRing) / 1000f * 5).toInt())
-                                    localHighScore += timeBonus
-                                }
+                                val feedbackColor = if (isPositive) Color.Green else Color.Red
+                                visualEffects.add(VisualEffect(message, feedbackColor, ballX, ballY + 60f))
 
-                                if (i < isTriggered.size) isTriggered[i] = true
-                                ringCount++
-                                timeSinceLastRing = System.currentTimeMillis()
-
-                                // Proceduralne generowanie kolejnego pierścienia
-                                if (rings.size < maxRings) {
-                                    val lastRing = rings.last()
-                                    val newInner = lastRing.outerRadius + 200f
-                                    val newOuter = newInner + 50f
-                                    val baseGaps = (floor(((PI.toFloat() * newInner) / gapSizeCollision) / 8)).toInt() + 1
-                                    val modGaps =     ((baseGaps + gapCountModifier) * gapMultiplier)
-                                        .roundToInt()
-                                        .coerceAtLeast(1)
-
-                                    ringToAdd = RingObstacle(BLACK_HOLE_CENTER, newOuter, newInner, obstacleColor, false, ringCount).apply {
-                                        totalExits = modGaps
+                                // --- LOGIKA OBLICZEŃ (Z TWOJEGO WKLEJONEGO KODU) ---
+                                when (g.effect.type) {
+                                    EffectType.POINTS -> {
+                                        val currentBase = localHighScore.toDouble()
+                                        val newScore = when (g.effect.operation) {
+                                            Operation.MULTIPLY -> currentBase * g.effect.value
+                                            Operation.DIVIDE -> if (g.effect.value != 0f) currentBase / g.effect.value else currentBase
+                                            Operation.ADD -> currentBase + g.effect.value
+                                            Operation.SUB -> currentBase + g.effect.value
+                                        }
+                                        localHighScore = newScore.toInt().coerceAtLeast(0)
+                                        pointEffectApplied = true
+                                    }
+                                    EffectType.TIME -> {
+                                        localTimer = (localTimer + g.effect.value.toInt()).coerceAtLeast(0)
+                                        if (g.effect.value > 0) bhPause += g.effect.value
+                                    }
+                                    EffectType.WALLS -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) {
+                                            wallMultiplier = (wallMultiplier * g.effect.value).coerceIn(0.25f, 3f)
+                                        } else {
+                                            wallCountModifier += g.effect.value.toInt()
+                                        }
+                                    }
+                                    EffectType.GAPS -> {
+                                        if (g.effect.operation == Operation.MULTIPLY || g.effect.operation == Operation.DIVIDE) {
+                                            gapMultiplier = (gapMultiplier * g.effect.value).coerceIn(0.25f, 3f)
+                                        } else {
+                                            gapCountModifier += g.effect.value.toInt()
+                                        }
                                     }
                                 }
+                            }
 
+                            // Bonus za czas, jeśli nie było efektu punktowego
+                            if (!pointEffectApplied) {
+                                val timeBonus = maxOf(0, 50 - ((System.currentTimeMillis() - timeSinceLastRing) / 1000f * 5).toInt())
+                                localHighScore += timeBonus
+                            }
+
+                            ringCount++
+                            timeSinceLastRing = System.currentTimeMillis()
+
+                            // --- GENEROWANIE NASTĘPNEGO PIERŚCIENIA ---
+                            if (rings.size < maxRings) {
+                                val lastRing = rings.last()
+                                val newInner = lastRing.outerRadius + 200f
+                                val newOuter = newInner + 50f
+
+                                // gapSizeCollision to stała, którą masz w kodzie (upewnij się, że jest dostępna)
+                                val baseGaps = (floor(((PI.toFloat() * newInner) / 40f) / 8)).toInt() + 1
+                                val modGaps = ((baseGaps + gapCountModifier) * gapMultiplier).roundToInt().coerceAtLeast(1)
+
+                                val nextRing = RingObstacle(BLACK_HOLE_CENTER, newOuter, newInner, obstacleColor, false, ringCount).apply {
+                                    totalExits = modGaps
+                                }
+
+                                // Dodanie do list musi odbyć się na wątku głównym UI, ponieważ rings i isTriggered to mutableStateListOf
+                                withContext(Dispatchers.Main) {
+                                    rings.add(nextRing)
+                                    isTriggered.add(false)
+                                    onScoreChange(localHighScore)
+                                    onTimeChange(localTimer)
+                                }
+                            } else {
+                                // Jeśli to ostatni pierścień, zaktualizuj tylko wyniki
                                 withContext(Dispatchers.Main) {
                                     onScoreChange(localHighScore)
                                     onTimeChange(localTimer)
                                 }
                             }
-
-                            if (i < prevStates.size) prevStates[i] = cur
-                            else prevStates.add(cur)
                         }
                     }
 
+                    // 4. Finalizacja dodania pierścienia
                     ringToAdd?.let {
                         withContext(Dispatchers.Main) {
                             rings.add(it)
-                            prevStates.add(false to false)
                             isTriggered.add(false)
                         }
                     }
                 }
+
             }
 
             // Warunek zwycięstwa (ukończenie wszystkich pierścieni)
@@ -735,6 +804,23 @@ fun GameCanvas(
 
         drawCircle(Color.Black, bhRadius, BLACK_HOLE_CENTER, alpha = 0.9f)
         drawCircle(ballColor, ballRadius, Offset(ballX, ballY))
+
+        visualEffects.forEach { ev ->
+            drawContext.canvas.nativeCanvas.drawText(
+                ev.text,
+                ev.x,
+                ev.y,
+                android.graphics.Paint().apply {
+                    color = ev.color.toArgb()
+                    textSize = 42f
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    alpha = (ev.alpha * 255).toInt()
+                    isFakeBoldText = true
+                    // Cień, aby tekst był widoczny na każdym tle
+                    setShadowLayer(12f, 0f, 0f, android.graphics.Color.BLACK)
+                }
+            )
+        }
 
         drawContext.canvas.restore()
     }
