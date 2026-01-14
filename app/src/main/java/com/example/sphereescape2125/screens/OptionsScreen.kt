@@ -1,7 +1,9 @@
 package com.example.sphereescape2125.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -14,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +48,20 @@ fun OptionsScreen(onBack: () -> Unit) {
 
     val sliderInactiveColor = if (isDark) Color.White.copy(alpha = 0.2f) else Color.Black.copy(alpha = 0.1f)
     val sliderActiveColor = if (isDark) Color.Cyan else Color(0xFF00897B)
+
+    // --- LOGIKA ZAPISU (Dodaj na początku funkcji OptionsScreen) ---
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("SphereEscapePrefs", Context.MODE_PRIVATE) }
+
+    // Nowe stany kalibracji
+    var shockSens by remember { mutableFloatStateOf(prefs.getFloat("ShockSens", 1.0f)) }
+    var lightSens by remember { mutableFloatStateOf(prefs.getFloat("LightSens", 0.5f)) }
+    var ballSpeed by remember { mutableFloatStateOf(prefs.getFloat("BallSpeed", 0.1f)) }
+
+    // Funkcja pomocnicza do zapisu
+    val saveSetting = { key: String, value: Float ->
+        prefs.edit().putFloat(key, value).apply()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -137,6 +154,30 @@ fun OptionsScreen(onBack: () -> Unit) {
                 )
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- SEKCJA KALIBRACJI (NOWOŚĆ) ---
+            Text("KALIBRACJA CZUJNIKÓW", color = sliderActiveColor, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
+
+            // 1. Czułość wstrząsów (od 0.5 do 3.0)
+            Text("Czułość wstrząsów: ${String.format("%.1f", shockSens)}x", color = secondaryTextColor)
+            Slider(
+                value = shockSens,
+                onValueChange = { shockSens = it; saveSetting("ShockSens", it) },
+                valueRange = 0.5f..3.0f, // 0.5 to muł, 3.0 to brzytwa
+                colors = SliderDefaults.colors(thumbColor = sliderActiveColor)
+            )
+
+            // 2. Czułość światła (Mapowanie 0.0 - 1.0 na 100lx - 500lx)
+            val currentLightThreshold = 100f + (lightSens * 400f)
+            Text("Próg trybu jasnego: ${currentLightThreshold.toInt()} lx", color = secondaryTextColor)
+            Slider(
+                value = lightSens,
+                onValueChange = { lightSens = it; saveSetting("LightSens", it) },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(thumbColor = sliderActiveColor)
+            )
+
             val resetButtonBorder = if (isDark) Color.Red.copy(alpha = 0.5f) else Color(0xFF283593).copy(alpha = 0.5f)
             val resetButtonShadow = if (isDark) Color.Red else Color(0xFF1A237E).copy(alpha = 0.5f)
 
@@ -152,6 +193,10 @@ fun OptionsScreen(onBack: () -> Unit) {
                         shape = RoundedCornerShape(30.dp)
                     )
                     .border(1.dp, resetButtonBorder, RoundedCornerShape(30.dp))
+                    .clickable {
+                        // Czyści HighScore oraz opcje kalibracji w SharedPreferences
+                        prefs.edit().clear().apply()
+                    }
             ) {
                 Text(
                     text = "RESETUJ POSTĘP",
