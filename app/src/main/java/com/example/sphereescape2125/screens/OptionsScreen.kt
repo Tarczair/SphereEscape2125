@@ -38,8 +38,9 @@ import com.example.sphereescape2125.components.GlassButton
  */
 @Composable
 fun OptionsScreen(onBack: () -> Unit) {
-    var musicVolume by remember { mutableStateOf(0.5f) }
-    var soundVolume by remember { mutableStateOf(0.7f) }
+    // Pobieramy aktualny stan z SoundManagera na start
+    var musicVolume by remember { mutableFloatStateOf(com.example.sphereescape2125.SoundManager.musicVolume) }
+    var soundVolume by remember { mutableFloatStateOf(com.example.sphereescape2125.SoundManager.sfxVolume) }
 
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
@@ -110,7 +111,10 @@ fun OptionsScreen(onBack: () -> Unit) {
 
             Slider(
                 value = musicVolume,
-                onValueChange = { musicVolume = it },
+                onValueChange = {
+                    musicVolume = it
+                    com.example.sphereescape2125.SoundManager.musicVolume = it // <-- To dodajemy
+                },
                 colors = SliderDefaults.colors(
                     thumbColor = sliderActiveColor,
                     activeTrackColor = sliderActiveColor.copy(alpha = 0.8f),
@@ -129,7 +133,10 @@ fun OptionsScreen(onBack: () -> Unit) {
             )
             Slider(
                 value = soundVolume,
-                onValueChange = { soundVolume = it },
+                onValueChange = {
+                    soundVolume = it
+                    com.example.sphereescape2125.SoundManager.sfxVolume = it // <-- To dodajemy
+                },
                 colors = SliderDefaults.colors(
                     thumbColor = sliderActiveColor,
                     activeTrackColor = sliderActiveColor.copy(alpha = 0.8f),
