@@ -608,6 +608,8 @@ fun GameCanvas(
                         if (isInside && !wasTriggered) {
                             isTriggered[i] = true // Blokada, aby efekt odpalił się tylko raz
 
+                            com.example.sphereescape2125.SoundManager.playPopSound()
+
                             val angle = Math.toDegrees(atan2((ballY - ring.center.y).toDouble(), (ballX - ring.center.x).toDouble()))
                                 .let { if (it < 0) it + 360 else it }.toFloat()
 

@@ -31,6 +31,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        SoundManager.init(this)
+        SoundManager.playMusic()
+
         setContent {
 
             val viewModel: MainViewModel = viewModel()
@@ -45,6 +49,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+    }
+    override fun onResume() {
+        super.onResume()
+        SoundManager.playMusic()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        SoundManager.pauseMusic()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        SoundManager.release()
     }
 }
 
